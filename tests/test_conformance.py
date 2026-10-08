@@ -170,8 +170,10 @@ def test_runtime_human(project, capsys):
 
 def test_packaged_example_human():
     result = subprocess.run(
-        [sys.executable, "-m", "scriptkit.conformance.resources.example"],
+        # Installed tests run under -I, which ignores PYTHONUTF8 in the parent.
+        # Pin both ends of the pipe rather than decoding UTF-8 Rich glyphs as cp1252.
+        [sys.executable, "-X", "utf8", "-m", "scriptkit.conformance.resources.example"],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
     assert result.returncode == 0 and "Count" in result.stdout and "60" in result.stdout
