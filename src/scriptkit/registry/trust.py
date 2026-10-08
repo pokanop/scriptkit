@@ -2,46 +2,12 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from scriptkit.contracts.codec import ContractError, Record
-from scriptkit.contracts.models import Artifact, constrained, name, record, unique
+from scriptkit.contracts.models import constrained, record, unique
+from scriptkit.contracts.catalog import Registry as Registry, origin_url as origin_url
 from scriptkit.state import LocalStateIO, StateIO
-
-
-def origin_url(value: str) -> str:
-    """Only canonical HTTPS directory URLs; no credentials, queries or redirects."""
-    url = urlsplit(value)
-    if (
-        url.scheme != "https"
-        or not url.hostname
-        or url.username is not None
-        or url.password is not None
-        or url.query
-        or url.fragment
-        or not value.endswith("/")
-        or re.fullmatch(r"https://[a-z0-9.-]+(?::[0-9]+)?/(?:[a-z0-9_-]+/)*", value) is None
-    ):
-        raise ContractError("origin must be a canonical HTTPS directory URL")
-    try:
-        url.port
-    except ValueError as exc:
-        raise ContractError("invalid origin port") from exc
-    return value
-
-
-@record
-class Registry(Record):
-    schema_version: int = constrained(const=1)
-    namespace: str = name()
-    origin: str
-    catalog: Artifact
-    expires_at: int = constrained(minimum=1)
-
-    def validate(self) -> None:
-        origin_url(self.origin)
 
 
 @record

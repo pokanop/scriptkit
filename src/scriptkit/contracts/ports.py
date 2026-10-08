@@ -7,7 +7,10 @@ All filesystem paths are relative to an adapter-owned, confined root.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Protocol
+
+from .catalog import ResolvedPlan
 
 from .models import AIProposal, Artifact, CatalogRelease, DependencyLock, ToolSpec
 
@@ -19,6 +22,20 @@ class ArtifactSource(Protocol):
 
     def fetch(self, artifact: Artifact) -> bytes:
         """Return bytes verified against artifact size and SHA-256 or raise."""
+        ...
+
+
+class InstallationSource(Protocol):
+    def authorize(self, plan: ResolvedPlan) -> None:
+        """Recheck current trust and pin policy; reject stale or unregistered plans."""
+        ...
+
+    def fetch(self, artifact: Artifact) -> bytes: ...
+
+
+class EnvironmentBackend(Protocol):
+    def stage(self, environment: Path, wheels: tuple[Path, ...]) -> Path:
+        """Create an offline environment at its final path; return its interpreter."""
         ...
 
 

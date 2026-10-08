@@ -1,6 +1,7 @@
 """Namespace-bound ArtifactSource adapter for injected manager consumers."""
 
 from scriptkit.contracts.codec import ContractError
+from scriptkit.contracts.catalog import ResolvedPlan
 from scriptkit.contracts.models import Artifact, CatalogRelease
 
 from .resolver import Resolver
@@ -26,6 +27,11 @@ class RegistryArtifactSource:
         if catalog.version != version:
             raise ContractError("unknown exact catalog version; no fallback permitted")
         return catalog
+
+    def authorize(self, plan: ResolvedPlan) -> None:
+        registry, catalog = self.resolver._catalog(self.namespace, self.offline)
+        if registry != plan.registry or plan.installation.release not in catalog.releases:
+            raise ContractError("installation plan no longer matches registered trust/pins")
 
     def fetch(self, artifact: Artifact) -> bytes:
         registry, catalog = self.resolver._catalog(self.namespace, self.offline)
