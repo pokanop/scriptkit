@@ -12,7 +12,7 @@ import uuid
 from scriptkit.bootstrap import Manager, default_root, read
 from scriptkit.contracts.catalog import Registry
 from scriptkit.contracts.models import Platform
-from scriptkit.output import OutputContext
+from scriptkit.output import CommandResult, OutputContext
 from scriptkit.registry.cache import VerifiedCache
 from scriptkit.registry.resolver import Resolver
 from scriptkit.registry.source import RegistryArtifactSource
@@ -28,6 +28,9 @@ def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true", help="versioned machine output")
     parser.add_argument("--quiet", action="store_true")
     commands = parser.add_subparsers(dest="command")
+    from .generator.cli import configure as configure_authoring
+
+    configure_authoring(commands)
     commands.add_parser("doctor", help="inspect manager/Python/PATH without mutation")
     registry = commands.add_parser("registry").add_subparsers(dest="action", required=True)
     registry.add_parser("list")
@@ -53,6 +56,15 @@ def configure(parser: argparse.ArgumentParser) -> None:
 
 
 def dispatch(args: argparse.Namespace, context: OutputContext) -> object:
+    from .generator.cli import COMMANDS, dispatch as dispatch_authoring
+
+    if args.command in COMMANDS:
+        authored = dispatch_authoring(args)
+        return CommandResult(
+            data=authored.data if context.policy.machine else authored.human,
+            exit_code=authored.exit_code,
+            error=authored.error,
+        )
     root = args.root.resolve()
     if args.command == "doctor":
         import importlib.util

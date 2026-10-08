@@ -2,7 +2,8 @@
 
 A dependency-light Python **3.11+** runtime for cohesive command-line tools.
 This repository ships the compatible 1.3.0 runtime, versioned data contracts,
-an opt-in [deterministic project generator](docs/generator.md), and a
+an opt-in [deterministic project generator](docs/generator.md),
+[offline tool/collection scaffolds](docs/scaffolds.md), and a
 [verified bootstrap and transactional tool manager](docs/bootstrap.md).
 AI integration remains under development.
 

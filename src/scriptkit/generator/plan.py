@@ -27,7 +27,7 @@ MANIFEST = CONTROL + "/manifest.json"
 @record
 class OwnedFile(Record):
     path: str = constrained(
-        pattern=rf"(?:{PATH}|^(?:\.gitattributes|\.scriptkit-generator/\.gitignore){END})",
+        pattern=rf"(?:{PATH}|^(?:\.gitattributes|\.scriptkit-generator/\.gitignore|README\.md|AUTHORING\.md|\.github/workflows/test\.yml){END})",
         maxLength=240,
     )
     sha256: str = digest()
@@ -36,7 +36,7 @@ class OwnedFile(Record):
 @record
 class Manifest(Record):
     schema_version: int = constrained(const=1)
-    template: str = constrained(enum=["1.0.0"])
+    template: str = constrained(enum=["1.0.0", "2.0.0"])
     formatter: str = constrained(enum=["text-lf-1"])
     spec_hash: str = digest()
     generated: tuple[OwnedFile, ...]
@@ -135,7 +135,7 @@ class Plan:
         ).decode()
 
 
-def preview(root: Path, rendered: Rendered) -> Plan:
+def preview(root: Path, rendered: Rendered, *, upgrade: bool = False) -> Plan:
     """Never writes, locks, recovers, executes formatters or imports user modules."""
     if (root / CONTROL / "journal.json").exists():
         raise ValueError("interrupted apply: recover before preview/check")
@@ -145,7 +145,15 @@ def preview(root: Path, rendered: Rendered) -> Plan:
         rendered.template,
         rendered.formatter,
     ):
-        raise ValueError("template/formatter migration requires an explicit supported migration")
+        if not (
+            upgrade
+            and (manifest.template, rendered.template, manifest.formatter, rendered.formatter)
+            == ("1.0.0", "2.0.0", "text-lf-1", "text-lf-1")
+        ):
+            raise ValueError(
+                "template/formatter migration requires an explicit supported migration; "
+                "for v1 tools use scriptkit template-upgrade PROJECT"
+            )
     old = {f.path: f.sha256 for f in manifest.generated} if manifest else {}
     old_user = set(manifest.user) if manifest else set()
     generated = dict(rendered.generated)
