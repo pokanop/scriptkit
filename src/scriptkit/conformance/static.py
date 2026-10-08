@@ -42,12 +42,14 @@ class Report:
         }
 
 
-def validate(root: Path) -> Report:
+def validate(root: Path, *, test_paths: tuple[str, ...] = ()) -> Report:
     """Check src-layout tools, including handwritten extensions, without execution.
 
     Distribution/import name differences are declared in
     [tool.scriptkit.conformance.imports], e.g. PIL = "Pillow".
     Dynamic imports/behavior require independent review and runtime tests.
+    Explicit test_paths are checked separately; pytest is allowed there only,
+    matching the generated CI's test runner, never in runtime source modules.
     """
     diagnostics: list[Diagnostic] = []
 
@@ -123,6 +125,14 @@ def validate(root: Path) -> Report:
     source = root / "src"
     trees: dict[str, ast.Module] = {}
 
+    def parse_source(relative: str) -> None:
+        data = load(relative)
+        if data is not None:
+            try:
+                trees[relative] = ast.parse(data, filename=relative)
+            except (SyntaxError, ValueError, RecursionError) as exc:
+                issue("SKV007", relative, f"Fix Python syntax: {exc}")
+
     # Do not follow directory links, even on Python versions where rglob changes behavior.
     def walk(directory: Path) -> None:
         for path in sorted(directory.iterdir()):
@@ -134,12 +144,7 @@ def validate(root: Path) -> Report:
             elif path.is_dir():
                 walk(path)
             elif path.suffix == ".py":
-                data = load(relative)
-                if data is not None:
-                    try:
-                        trees[relative] = ast.parse(data, filename=relative)
-                    except (SyntaxError, ValueError, RecursionError) as exc:
-                        issue("SKV007", relative, f"Fix Python syntax: {exc}")
+                parse_source(relative)
 
     try:
         if (
@@ -152,6 +157,10 @@ def validate(root: Path) -> Report:
     except (OSError, ValueError) as exc:
         issue("SKV001", "src", str(exc))
     local = {p.split("/")[1].removesuffix(".py") for p in trees}
+    for path in test_paths:
+        if not path.startswith("tests/") or not path.endswith(".py"):
+            raise ValueError("test_paths must name Python files under tests/")
+        parse_source(path)
     module, function = spec.entrypoint.split(":")
     base = "src/" + module.replace(".", "/")
     launcher = next((p for p in (base + "/__init__.py", base + ".py") if p in trees), base + ".py")
@@ -174,6 +183,7 @@ def validate(root: Path) -> Report:
                     name not in local
                     and name not in sys.stdlib_module_names
                     and normalized(aliases.get(name, name)) not in declared
+                    and not (path in test_paths and name == "pytest")
                 ):
                     issue(
                         "SKV009",
