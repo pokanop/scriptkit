@@ -6,6 +6,11 @@ provider SDK, credentials, network, or special assistant integration is required
 
 - Keep ToolSpec tool.json, project metadata and console entrypoints consistent.
 - Edit user-owned _handlers.py and modules; never edit hash-owned generated launchers.
+  Validation permits additive pyproject dependencies and [tool.scriptkit.*] settings,
+  while protecting all other generated metadata and the exact framework pin. Keep the
+  manifest. Generator add-command/upgrade still conflicts on the extended file: preserve
+  it, restore the recorded baseline for apply, then reapply only user additions to the
+  new baseline and validate. Never delete the manifest or discard extensions.
   Preview `scriptkit add-command` / `template-upgrade` before applying changes.
 - Use scaffold_runtime.tool_main for command parsing, read-only doctor/config, explicit
   dispatch, and the output boundary. Return JSON-compatible data from handlers.

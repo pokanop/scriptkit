@@ -9,7 +9,21 @@ Supported authoring contract: src-layout ToolSpec tools, console script matching
 metadata, scaffold_runtime.tool_main wiring, declared runtime imports and a JSON
 object config.example.json. Both scaffold layouts and user-owned extensions work.
 Handwritten tools can omit the ownership manifest; when present, all generated file
-hashes and the spec hash are checked. This checks recorded ownership drift, not whether
+hashes and the spec hash are checked. A narrow semantic exception permits added
+`project.dependencies` and `[tool.scriptkit.*]` tables in `pyproject.toml`: validation
+reconstructs the recorded template baseline and verifies its hash before comparing
+all other fields, including the exact framework dependency pin, build-system,
+metadata, scripts and package discovery. An unreconstructable baseline fails closed
+(use the framework version that generated it). Do not edit the manifest to bypass drift.
+
+This is a validation policy, not a generator ownership migration. `add-command` and
+`template-upgrade` still report a conflict on extended `pyproject.toml` and will not
+overwrite it. For reconciliation, preserve the extended file, restore the recorded
+baseline temporarily, apply the reviewed generator plan, then reapply only the
+user dependency/settings additions to the new baseline and validate again. Never
+delete the manifest or discard user extensions to force an apply.
+
+This checks recorded ownership drift, not whether
 a manifest was honestly authored or whether the latest templates were used.
 Legacy generator-v1 tools should use template-upgrade to adopt doctor/config/output
 conventions. Custom runtime implementations are intentionally not auto-certified.
@@ -38,6 +52,11 @@ Import/distribution differences are explicit, never guessed from the host enviro
 [tool.scriptkit.conformance.imports]
 PIL = "Pillow"
 ```
+
+Entrypoints may be module files or package `__init__.py` files (packages take
+precedence, matching Python import resolution). Syntax grammar and stdlib import
+classification currently come from the host Python, not the tool's declared range;
+run validation/tests on each supported interpreter for compatibility evidence.
 
 Static checks are conservative syntax/convention checks, not semantic verification:
 aliases, dynamic imports, reflective calls, monkeypatching and writes to streams can

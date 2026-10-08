@@ -79,10 +79,12 @@ def test_spec_drift_and_missing(project):
     assert {"SKV004", "SKV013", "SKV015"} <= codes(project)
 
 
-def test_handwritten_without_manifest_aliases(project):
-    (project / MANIFEST).unlink()
+@pytest.mark.parametrize("manifest", [True, False])
+def test_extended_dependencies_aliases(project, manifest):
+    if not manifest:
+        (project / MANIFEST).unlink()
     metadata = project / "pyproject.toml"
-    text = metadata.read_text().replace("dependencies = [", 'dependencies = ["Pillow>=1", ')
+    text = metadata.read_text().replace("dependencies = [", 'dependencies = ["Pillow(>=1)", ')
     metadata.write_text(text + '\n[tool.scriptkit.conformance.imports]\nPIL = "Pillow"\n')
     (project / "src/demo/_handlers.py").write_text("import PIL\nfrom .business import total\n")
     assert validate(project).valid

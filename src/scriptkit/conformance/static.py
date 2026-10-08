@@ -62,13 +62,24 @@ def validate(root: Path) -> Report:
             return None
 
     raw = load("tool.json")
+    if raw is None:
+        issue("SKV002", "tool.json", "tool.json is missing or unreadable; provide a ToolSpec")
+        return Report(tuple(sorted(diagnostics)))
     try:
         spec = ToolSpec.from_json((raw or b"").decode("utf-8"))
     except (ValueError, UnicodeError) as exc:
         issue("SKV002", "tool.json", f"Provide a valid ToolSpec: {exc}")
         return Report(tuple(sorted(diagnostics)))
+    metadata_raw = load("pyproject.toml")
+    if metadata_raw is None:
+        issue(
+            "SKV003",
+            "pyproject.toml",
+            "pyproject.toml is missing or unreadable; provide project metadata",
+        )
+        return Report(tuple(sorted(diagnostics)))
     try:
-        project = tomllib.loads((load("pyproject.toml") or b"").decode("utf-8"))
+        project = tomllib.loads(metadata_raw.decode("utf-8"))
         metadata = project["project"]
         if not isinstance(metadata, dict):
             raise ValueError("project must be a table")
@@ -96,7 +107,7 @@ def validate(root: Path) -> Report:
     def normalized(name: str) -> str:
         return re.sub(r"[-_.]+", "-", name).lower()
 
-    declared = {normalized(re.split(r"[\s\[<>=!~;@]", d)[0]) for d in dependencies}
+    declared = {normalized(re.split(r"[\s\[(<>=!~;@]", d)[0]) for d in dependencies}
     if "pokanop-scriptkit" not in declared:
         issue("SKV006", "pyproject.toml", "Declare pokanop-scriptkit as a runtime dependency")
     settings: Any = project
@@ -127,7 +138,7 @@ def validate(root: Path) -> Report:
                 if data is not None:
                     try:
                         trees[relative] = ast.parse(data, filename=relative)
-                    except (SyntaxError, ValueError) as exc:
+                    except (SyntaxError, ValueError, RecursionError) as exc:
                         issue("SKV007", relative, f"Fix Python syntax: {exc}")
 
     try:
@@ -142,7 +153,8 @@ def validate(root: Path) -> Report:
         issue("SKV001", "src", str(exc))
     local = {p.split("/")[1].removesuffix(".py") for p in trees}
     module, function = spec.entrypoint.split(":")
-    launcher = "src/" + module.replace(".", "/") + ".py"
+    base = "src/" + module.replace(".", "/")
+    launcher = next((p for p in (base + "/__init__.py", base + ".py") if p in trees), base + ".py")
     tree = trees.get(launcher)
     if tree is None or not any(
         isinstance(n, ast.FunctionDef) and n.name == function for n in tree.body
@@ -239,6 +251,14 @@ def validate(root: Path) -> Report:
             for item in owned.generated:
                 current = load(item.path)
                 if current is None or sha256(current) != item.sha256:
+                    from .ownership import metadata_extension
+
+                    if (
+                        item.path == "pyproject.toml"
+                        and current is not None
+                        and metadata_extension(spec, owned.template, item.sha256, current)
+                    ):
+                        continue
                     issue(
                         "SKV013",
                         item.path,
