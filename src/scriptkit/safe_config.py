@@ -112,10 +112,23 @@ class SafeConfig:
         self._validate(data)
         if self.env_prefix:
             prefix = self.env_prefix.upper().rstrip("_") + "_"
+            secret_env = set()
+            for field in self.secret_fields:
+                ref = get_nested(data, field)
+                if isinstance(ref, dict) and ref["source"] == "env":
+                    secret_env.add(ref["name"].upper())
             for key, value in self.environ.items():
-                if key.upper().startswith(prefix):
+                if key.upper().startswith(prefix) and key.upper() not in secret_env:
                     path = key[len(prefix) :].lower().replace("__", ".")
-                    if path:
+                    # Neither plaintext nor edits to a reference belong in env config
+                    # overrides. Ancestors could also erase a nested secret reference.
+                    secret_path = any(
+                        path == field
+                        or path.startswith(field + ".")
+                        or field.startswith(path + ".")
+                        for field in self.secret_fields
+                    )
+                    if path and not secret_path:
                         set_nested(data, path, value, coerce=self.coerce_env)
         self._validate(data)
         self._snapshot, self._loaded = raw, True

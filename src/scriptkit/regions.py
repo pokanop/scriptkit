@@ -16,6 +16,7 @@ class RegionReceipt:
     owner: str
     block: bytes
     separator: bytes
+    created: bool = False
 
 
 class OwnedRegion:
@@ -82,8 +83,9 @@ class OwnedRegion:
         inserted = separator + block
         updated = text[: span[0]] + inserted + text[span[1] :] if span else text + inserted
         if updated != text:
-            self.io.replace(path, updated, expected=raw)
-        return RegionReceipt(self.owner, block, separator)
+            self.io.replace(path, updated, expected=raw, mode=None)
+        created = receipt.created if receipt else raw is None
+        return RegionReceipt(self.owner, block, separator, created)
 
     def clear(self, path: Path, *, receipt: RegionReceipt) -> bool:
         raw = self.io.read(path)
@@ -93,5 +95,9 @@ class OwnedRegion:
         span = self._owned(text, receipt)
         assert span is not None
         updated = text[: span[0]] + text[span[1] :]
-        self.io.replace(path, updated, expected=raw)
+        if receipt.created and not updated:
+            assert raw is not None
+            self.io.remove(path, expected=raw)
+        else:
+            self.io.replace(path, updated, expected=raw, mode=None)
         return True

@@ -38,7 +38,11 @@ small `StateIO` protocol for offline use/fault testing.
 
 Declared secret fields accept only `{"source": "env" | "keyring", "name": "..."}`
 (or null/missing); they never resolve values. Declare all application secret fields
-and reject unknown fields in the validator. This is not a heuristic secret scanner.
+and reject unknown fields in the validator. Environment overrides skip declared
+secret paths (including ancestors and descendants) and the environment names used
+by stored/default secret references. Thus setting `TOOL_TOKEN` in the example
+never replaces the reference or copies its value into config. Non-secret overrides
+such as `TOOL_PORT` work as before. This is not a heuristic secret scanner.
 Provider adapters resolve references at use time. Never persist an effective config
 containing credentials; never put secrets in managed regions/receipts. These
 primitives emit no logs. `BoundedRunner(check=True)` also omits command arguments
@@ -53,7 +57,14 @@ and captured output from errors; captured output itself is the caller's responsi
 3. Write a unique private sibling, set permissions before publication, flush/fsync.
 4. Atomically `os.replace` the target, then remove staging/lock files.
 
-Write/chmod/fsync/replace failures and Python interruption before replacement leave
+Pass `mode=None` to preserve an existing file's mode and POSIX owner/group under
+the same lock. New files still default to `0600`. Ownership is applied before the
+mode (chown may clear set-id bits), and failures abort before publishing. Explicit
+integer modes retain the private-config behavior. `remove(path, expected=bytes)`
+uses the same lock and byte comparison before unlinking; it never deletes stale or
+foreign state. Custom `StateIO` adapters must implement both operations.
+
+Write/chmod/chown/fsync/replace failures and Python interruption before replacement leave
 the original intact. Concurrent cooperating writers cannot overwrite each other's
 changes. If publication succeeds but cleanup is interrupted, reload to determine
 the committed state. A killed process may leave a lock/staging file: verify no
@@ -94,14 +105,21 @@ receipt = region.apply(rc_path, 'export PATH="/opt/tool/bin:$PATH"', receipt=rec
 region.clear(rc_path, receipt=receipt)
 ```
 
-Persist the `RegionReceipt` owner/block/separator in the install receipt; the
+Persist the `RegionReceipt` owner/block/separator/created fields in the install receipt; the
 caller must associate it with the correct file. Only the exact previously written
 block may be updated or removed. Missing ownership, drift, duplicate/partial/
 reversed fences and marker injection fail closed. Foreign marker substrings are
 not fences. Repeated apply/clear is idempotent. Foreign bytes, CRLF and the original
 EOF newline state survive cleanup; edits outside the block survive too. No backup
-is overwritten or removed. New/updated files use private `0600` mode. The helper
-only manages text: the caller owns platform-specific shell escaping and PATH syntax.
+is overwritten or removed. New files use private `0600` mode; existing files retain
+their mode and POSIX uid/gid on both apply and clear (using `mode=None`). A file
+created by apply is removed on clear only if removing the owned region leaves it
+empty. Existing empty files and created files with later foreign additions survive.
+The `created` flag defaults to false for older receipts, conservatively retaining
+the file when its creation is not proven. Windows ACL/owner and extended-attribute
+preservation are not provided by chmod; callers needing those require a native
+StateIO adapter. The helper only manages text: the caller owns platform-specific
+shell escaping and PATH syntax.
 
 ## Bounded processes
 
@@ -133,7 +151,7 @@ creation are synchronous. No global process-name or unrelated-PID termination.
 
 ## Verification
 
-`tests/test_{state_io,safe_config,paths_regions,execution,windows_job}.py` cover
+`tests/test_{state_io,safe_config,paths_regions,io_review,execution,windows_job}.py` cover
 fault-injected writes/permissions/interruptions, concurrent conflicts, strict
 loading, references, native/platform-injected paths, reversible ownership, process
 limits, cancellation/Ctrl-C, descendant cleanup and unrelated-process survival.
