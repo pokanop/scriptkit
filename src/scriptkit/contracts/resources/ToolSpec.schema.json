@@ -13,6 +13,7 @@
               "properties": {
                 "choices": {
                   "items": {
+                    "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
                     "type": "string"
                   },
                   "type": "array"
@@ -20,6 +21,7 @@
                 "default": {
                   "anyOf": [
                     {
+                      "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
                       "type": "string"
                     },
                     {
@@ -35,6 +37,7 @@
                 },
                 "help": {
                   "maxLength": 4096,
+                  "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
                   "type": "string"
                 },
                 "kind": {
@@ -43,6 +46,7 @@
                     "option",
                     "flag"
                   ],
+                  "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
                   "type": "string"
                 },
                 "name": {
@@ -64,6 +68,7 @@
                     "integer",
                     "boolean"
                   ],
+                  "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
                   "type": "string"
                 }
               },
@@ -83,6 +88,7 @@
           },
           "help": {
             "maxLength": 4096,
+            "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
             "type": "string"
           },
           "name": {
@@ -109,6 +115,7 @@
     },
     "description": {
       "maxLength": 4096,
+      "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
       "type": "string"
     },
     "entrypoint": {
@@ -131,6 +138,7 @@
               "x86_64",
               "arm64"
             ],
+            "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
             "type": "string"
           },
           "os": {
@@ -139,6 +147,7 @@
               "macos",
               "windows"
             ],
+            "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
             "type": "string"
           }
         },

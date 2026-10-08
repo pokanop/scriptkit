@@ -16,8 +16,12 @@ def constrained(**rules: Any) -> Any:
 # Full-match in Python; explicit end assertion also works in JSON Schema engines.
 END = r"$(?![\s\S])"
 NAME = r"^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$))[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*" + END
-COMPONENT = r"(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|/|$))[a-z0-9_][a-z0-9_.-]*(?<!\.)"
+COMPONENT = (
+    r"(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|/|$))[a-z0-9_](?:[a-z0-9_.-]*[a-z0-9_-])?"
+)
 PATH = "^" + COMPONENT + "(?:/" + COMPONENT + ")*" + END
+INVENTORY_COMPONENT = r"(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_-])?"
+INVENTORY_PATH = "^" + INVENTORY_COMPONENT + "(?:/" + INVENTORY_COMPONENT + ")*" + END
 SEMVER = (
     r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
     + END
@@ -171,7 +175,11 @@ class ToolSpec(Record):
 
 @record
 class Artifact(Record):
-    path: str = path()
+    path: str = constrained(
+        pattern=INVENTORY_PATH,
+        maxLength=240,
+        description="expected case-preserving relative POSIX path; no traversal, devices or trailing dots",
+    )
     sha256: str = digest()
     size: int = constrained(minimum=0)
 
@@ -180,7 +188,7 @@ class Artifact(Record):
 class LockedPackage(Record):
     name: str = constrained(
         maxLength=128,
-        pattern=r"^[a-z0-9]+(?:[._-][a-z0-9]+)*" + END,
+        pattern=r"^[a-z0-9][a-z0-9+@._-]*" + END,
         description="expected normalized package identifier, not a path or command",
     )
     version: str = constrained(
@@ -287,8 +295,9 @@ class Receipt(Record):
     files: tuple[Artifact, ...] = constrained(minItems=1)
 
     def validate(self) -> None:
-        unique([artifact.path for artifact in self.files], "files.path")
-        disjoint_paths([artifact.path for artifact in self.files], "files.path")
+        paths = [artifact.path.casefold() for artifact in self.files]
+        unique(paths, "files.path (casefold)")
+        disjoint_paths(paths, "files.path (casefold)")
 
 
 @record
@@ -303,6 +312,9 @@ class Generation(Record):
     def validate(self) -> None:
         if self.name == self.previous:
             raise ContractError("previous: must differ from generation name")
+        if len({r.plan.platform for r in self.receipts}) != 1:
+            raise ContractError("receipts.plan.platform: generation must target one host platform")
+        # Per-tool environments may deliberately use different compatible Python versions.
         unique([r.plan.release.tool.name for r in self.receipts], "receipts tool.name")
         unique([r.plan.destination for r in self.receipts], "receipts destination")
         for receipt in self.receipts:

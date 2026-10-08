@@ -40,7 +40,7 @@ def imports(text, module, is_package=False):
             yield from (base + "." + alias.name for alias in node.names)
         elif isinstance(node, ast.Call) and (
             isinstance(node.func, ast.Name)
-            and node.func.id == "__import__"
+            and node.func.id in {"__import__", "import_module"}
             or isinstance(node.func, ast.Attribute)
             and node.func.attr == "import_module"
         ):
@@ -96,6 +96,7 @@ def test_checker_detects_regressions():
         ("import requests", "scriptkit.contracts.models"),
         ("importlib.import_module('scriptkit.ai')", "scriptkit.app"),
         ("__import__(computed)", "scriptkit.app"),
+        ("from importlib import import_module; import_module('scriptkit.ai')", "scriptkit.app"),
     ]:
         assert violations(code, module), code
 

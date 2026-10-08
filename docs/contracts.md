@@ -22,11 +22,20 @@ unknown schema versions fail with `ContractError(ValueError)` and a field path.
 Booleans are not integers. Code strings are not evaluated, entry points are not
 imported, and proposal contents confer no authorization to install or execute.
 An entrypoint is only a `module.path:callable` reference, not a shell command.
+All string fields, including descriptions, help, choices, defaults and AI text,
+reject C0/C1 control characters and DEL except newline and tab. The exported
+schemas enforce the same rule; untrusted terminal escape sequences never become
+valid contract data.
 
-Names are portable lowercase identifiers, limited to 64 characters. Paths are
-portable lowercase relative POSIX paths, limited to 240 characters: no absolute
+Names are portable lowercase identifiers, limited to 64 characters. Installation
+destinations are lowercase relative POSIX paths; artifact and inventory paths
+preserve ASCII case (for example `PIL/Image.py`, `Scripts/python.exe`, `LICENSE`
+and `.dist-info/METADATA` under a package prefix). Paths are limited to 240
+characters: no absolute
 paths, drive letters, separators other than `/`, empty/dot/traversal components,
-Windows device names, trailing dots/spaces or control characters. This deliberately
+Windows device names in any case, trailing dots/spaces or control characters.
+Receipts reject casefold-equivalent file names and file/directory collisions,
+even on case-sensitive hosts, so their inventories are portable. This deliberately
 conservative v1 grammar is not an arbitrary host-path format. Filesystem adapters
 must ALSO enforce root confinement, reject symlink escapes and handle TOCTOU;
 syntactic validation is not a filesystem sandbox. Platform names are `linux`,
@@ -34,8 +43,9 @@ syntactic validation is not a filesystem sandbox. Platform names are `linux`,
 translation from host spellings (`AMD64`, `aarch64`, `darwin`).
 
 Tool/catalog versions use SemVer 2.0. Package identifiers are normalized lowercase
-alphanumeric components separated by `.`, `_` or `-` (including qualified winget
-IDs); they are not filesystem paths. Package versions are exact numeric-leading
+identifiers starting with an alphanumeric and containing alphanumerics, `.`, `_`,
+`-`, `+` or `@` (including qualified winget IDs, apt `g++`/`libstdc++6` and brew
+`python@3.12`/`openssl@3`); they are not filesystem paths. Package versions are exact numeric-leading
 backend versions (not Python-only SemVer, moving tags or solver expressions).
 Adapters must additionally validate their backend's version grammar and verify
 that fetched metadata matches the exact lock. SHA-256 values are
@@ -65,7 +75,7 @@ not strings with potentially ambiguous timezones.
 | `CatalogRelease` / `ToolRelease` | Immutable catalog identity/version; each tool release includes a validated spec, source artifact and complete lock set. Duplicate tool/version pairs fail. Artifact paths are relative to the catalog's adapter-owned root, not network URLs. |
 | `InstallPlan` | Pinned catalog digest, release snapshot, platform/Python selection, confined relative destination and new/previous generation IDs. Planning is not execution. |
 | `Receipt` | One successful staged installation: full plan, completion time, unique relative file hash/size inventory. Inventory paths are relative to the plan destination and cannot overlap as file/directory. No failed or half-installed receipt is valid evidence of success. |
-| `Generation` | Nonempty group of receipts with matching generation lineage, unique tools and disjoint destinations; describes a completed candidate snapshot, not whether it is active. The manager atomically owns activation/rollback state and interruption journals. |
+| `Generation` | Nonempty group of receipts with matching generation lineage, unique tools and disjoint destinations on one OS/architecture. Python versions may differ because each tool owns an isolated environment and its plan independently validates compatibility; describes a completed candidate snapshot, not whether it is active. The manager atomically owns activation/rollback state and interruption journals. |
 | `AIProposal` | Provider/model/request identity, optional base-spec digest, rationale and validated candidate ToolSpec. Proposal acceptance/review, credentials and execution are intentionally outside this envelope. |
 
 `Artifact`, `LockedPackage`, `Platform`, `PythonRequirement` and `ToolRelease`

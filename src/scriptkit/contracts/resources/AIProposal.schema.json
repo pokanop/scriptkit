@@ -6,6 +6,7 @@
     "base_sha256": {
       "anyOf": [
         {
+          "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
           "type": "string"
         },
         {
@@ -18,6 +19,7 @@
     "model": {
       "maxLength": 128,
       "minLength": 1,
+      "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
       "type": "string"
     },
     "provider": {
@@ -29,6 +31,7 @@
     "rationale": {
       "maxLength": 8192,
       "minLength": 1,
+      "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
       "type": "string"
     },
     "request_id": {
@@ -54,6 +57,7 @@
                   "properties": {
                     "choices": {
                       "items": {
+                        "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
                         "type": "string"
                       },
                       "type": "array"
@@ -61,6 +65,7 @@
                     "default": {
                       "anyOf": [
                         {
+                          "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
                           "type": "string"
                         },
                         {
@@ -76,6 +81,7 @@
                     },
                     "help": {
                       "maxLength": 4096,
+                      "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
                       "type": "string"
                     },
                     "kind": {
@@ -84,6 +90,7 @@
                         "option",
                         "flag"
                       ],
+                      "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
                       "type": "string"
                     },
                     "name": {
@@ -105,6 +112,7 @@
                         "integer",
                         "boolean"
                       ],
+                      "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
                       "type": "string"
                     }
                   },
@@ -124,6 +132,7 @@
               },
               "help": {
                 "maxLength": 4096,
+                "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
                 "type": "string"
               },
               "name": {
@@ -150,6 +159,7 @@
         },
         "description": {
           "maxLength": 4096,
+          "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
           "type": "string"
         },
         "entrypoint": {
@@ -172,6 +182,7 @@
                   "x86_64",
                   "arm64"
                 ],
+                "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
                 "type": "string"
               },
               "os": {
@@ -180,6 +191,7 @@
                   "macos",
                   "windows"
                 ],
+                "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
                 "type": "string"
               }
             },

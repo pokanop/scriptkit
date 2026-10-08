@@ -10,6 +10,7 @@
         "brew",
         "winget"
       ],
+      "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
       "type": "string"
     },
     "packages": {
@@ -20,9 +21,9 @@
             "additionalProperties": false,
             "properties": {
               "path": {
-                "description": "expected portable lowercase relative POSIX path; no traversal, devices or trailing dots",
+                "description": "expected case-preserving relative POSIX path; no traversal, devices or trailing dots",
                 "maxLength": 240,
-                "pattern": "^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\\.|/|$))[a-z0-9_][a-z0-9_.-]*(?<!\\.)(?:/(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\\.|/|$))[a-z0-9_][a-z0-9_.-]*(?<!\\.))*$(?![\\s\\S])",
+                "pattern": "^(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_-])?(?:/(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_-])?)*$(?![\\s\\S])",
                 "type": "string"
               },
               "sha256": {
@@ -45,7 +46,7 @@
           "name": {
             "description": "expected normalized package identifier, not a path or command",
             "maxLength": 128,
-            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$(?![\\s\\S])",
+            "pattern": "^[a-z0-9][a-z0-9+@._-]*$(?![\\s\\S])",
             "type": "string"
           },
           "version": {
@@ -73,6 +74,7 @@
             "x86_64",
             "arm64"
           ],
+          "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
           "type": "string"
         },
         "os": {
@@ -81,6 +83,7 @@
             "macos",
             "windows"
           ],
+          "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
           "type": "string"
         }
       },

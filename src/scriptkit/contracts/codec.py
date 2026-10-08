@@ -3,13 +3,29 @@
 from __future__ import annotations
 
 from dataclasses import Field, fields, is_dataclass
-from collections.abc import Mapping
+from collections.abc import Hashable, Mapping
 from operator import lt, gt
 from importlib.resources import files
+from functools import cache
 import json
 import re
 from types import UnionType
-from typing import Any, ClassVar, NoReturn, Self, Union, cast, get_args, get_origin, get_type_hints
+from typing import Any, ClassVar, NoReturn, Self, Union, cast, get_args, get_origin
+from typing import get_type_hints as _resolve_hints
+
+
+SAFE_TEXT = r"^[^\u0000-\u0008\u000b-\u001f\u007f-\u009f]*$(?![\s\S])"
+
+
+def get_type_hints(kind: type[Any]) -> dict[str, Any]:
+    # Class objects are hashable; mypy's cache wrapper loses the type parameter.
+    return _cached_hints(cast(Hashable, kind))
+
+
+@cache
+def _cached_hints(kind: type[Any]) -> dict[str, Any]:
+    """Contract classes are immutable definitions; resolve annotations once per class."""
+    return _resolve_hints(kind)
 
 
 class ContractError(ValueError):
@@ -113,10 +129,9 @@ def _decode(kind: Any, value: Any, path: str) -> Any:
                 f"{path}: unknown fields {sorted(unknown)}; missing fields {sorted(missing)}"
             )
         hints = get_type_hints(kind)
+        decoded = {key: _decode(hints[key], item, f"{path}.{key}") for key, item in value.items()}
         try:
-            return kind(
-                **{key: _decode(hints[key], item, f"{path}.{key}") for key, item in value.items()}
-            )
+            return kind(**decoded)
         except ContractError as exc:
             raise ContractError(f"{path}: {exc}") from exc
     _check(kind, value, path, {})
@@ -142,6 +157,8 @@ def _check(kind: Any, value: Any, path: str, rules: Mapping[str, Any]) -> None:
             _check(args[0], item, f"{path}[{i}]", {})
     elif type(value) is not kind:
         raise ContractError(f"{path}: expected {kind.__name__}, got {type(value).__name__}")
+    if kind is str and re.fullmatch(SAFE_TEXT, value) is None:
+        raise ContractError(f"{path}: control characters are forbidden except newline and tab")
     if "const" in rules and value != rules["const"]:
         raise ContractError(f"{path}: unsupported value {value!r}; expected {rules['const']!r}")
     if "enum" in rules and value not in rules["enum"]:
@@ -172,7 +189,9 @@ def _schema(kind: Any) -> dict[str, Any]:
                 f.name: {**_schema(hints[f.name]), **dict(f.metadata)} for f in fields(kind)
             },
         }
-    return {"type": {str: "string", int: "integer", bool: "boolean", type(None): "null"}[kind]}
+    if kind is str:
+        return {"type": "string", "pattern": SAFE_TEXT}
+    return {"type": {int: "integer", bool: "boolean", type(None): "null"}[kind]}
 
 
 def resource_text(name: str) -> str:
