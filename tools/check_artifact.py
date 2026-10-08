@@ -43,7 +43,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wheel", type=Path)
     parser.add_argument("--rich", action="store_true")
+    parser.add_argument("--rich-version", help="Test a specific supported Rich version")
     args = parser.parse_args()
+    if args.rich_version and not args.rich:
+        parser.error("--rich-version requires --rich")
     wheel = args.wheel.resolve(strict=True)
     root = Path(__file__).resolve().parent.parent
     with tempfile.TemporaryDirectory(prefix="scriptkit-artifact-") as tmp:
@@ -60,7 +63,8 @@ def main() -> None:
             subprocess.run(argv, cwd=work, env=env, check=True)
 
         if args.rich:
-            run(str(python), "-m", "pip", "install", f"{wheel}[rich]")
+            constraints = [f"rich=={args.rich_version}"] if args.rich_version else []
+            run(str(python), "-m", "pip", "install", f"{wheel}[rich]", *constraints)
         else:
             run(str(python), "-m", "pip", "install", "--no-deps", str(wheel))
         run(str(python), "-I", "-c", SMOKE, "rich" if args.rich else "bare")

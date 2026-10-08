@@ -13,7 +13,10 @@ It always runs and rejects failed, cancelled **and skipped** prerequisite jobs:
   line coverage relative to the PR base. Coverage includes all runtime modules;
   branch measurement is enabled. Critical failure/recovery branches require
   explicit tests in review, not just a percentage. A subprocess self-test proves
-  pytest and mypy reject deliberately broken inputs.
+  pytest and mypy reject deliberately broken inputs using the project's discovery
+  and policy configuration; mypy targets Python 3.11 even on the 3.14 runner.
+  Every remote workflow action pin (including release-only actions) must resolve
+  through GitHub's git-commit API; annotated tag objects and lookup failures fail CI.
 - `dependency-security`: audits the resolved development and Rich dependency graph,
   including build tooling. No advisory suppressions; network/audit failures fail CI.
 - `release-rehearsal`: two clean git-archive builds, isolated pinned backend builds,
@@ -32,14 +35,14 @@ release; extend the explicit matrix when a new stable Python is released.
 The twelve imported 1.3.0 modules are explicitly listed in the mypy/formatter
 configuration to preserve the foundation's unmodified runtime. They still receive
 syntax/correctness lint, full tests, and changed-line coverage; new modules get
-strict typing and formatting automatically. The lint rule set is intentionally
-minimal during extraction, not a claim that legacy code is style-clean. There are
+strict typing and formatting automatically. Ruff's default E4/E7/E9/F rules apply
+to all source, tests and tooling with no lint exclusions. There are
 **no changed-line coverage exclusions** within `src/scriptkit`; tests/tooling are
 not framework runtime and have dedicated behavioral tests. Removal/expansion of
 legacy exceptions or reduction of test floors requires independent review.
 
 Rich 14 is now supported (`>=13.9.4,<15`) and the latest allowed release is tested;
-Rich 13 remains allowed for backward compatibility. Windows console control-event
+the installed-wheel suite also tests the exact 13.9.4 lower bound on Linux/Python 3.11. Windows console control-event
 injection remains untested (the inherited POSIX signal test is platform-specific).
 
 ## Reproducible release and provenance
@@ -54,14 +57,30 @@ only with a reviewed rehearsal. `dist/SHA256SUMS` and `dist/build.json` record h
 and source commit; the latter is metadata, not a cryptographic attestation.
 
 After this workflow lands on main, **Release → Run workflow** performs the full
-matrix/rehearsal and signs every artifact with GitHub OIDC provenance, then verifies
-that provenance using `gh attestation verify` against this repository, workflow and
-commit. Dispatch never publishes. PR CI cannot obtain an OIDC token or attestations
+matrix/rehearsal and, only on `main` or protected `v*` tags, signs every artifact
+with GitHub OIDC provenance. Dispatches on other branches cannot sign. Verification
+binds this repository, workflow, commit and exact source ref and rejects self-hosted
+runners. Dispatch never publishes. PR CI cannot obtain an OIDC token or attestations
 write permission; it tests checksums/reproducibility but cannot sign provenance.
 A protected `v<pyproject version>` tag can publish only after every gate and the
 `pypi` environment approval. Publication uses the same verified artifacts, not a
 rebuild. Failed verification or upload stops publication; there is no skip-existing
 or automatic retry that could silently combine partial releases.
+
+Consumers must verify the expected ref, not just the workflow identity. Substitute
+an independently reviewed commit and its release tag (or `refs/heads/main` for a
+rehearsal) in this command; do not trust values supplied solely with the artifact:
+
+```sh
+gh attestation verify artifact.whl --repo pokanop/scriptkit \
+  --signer-workflow pokanop/scriptkit/.github/workflows/release.yml \
+  --source-digest "$EXPECTED_COMMIT" --signer-digest "$EXPECTED_COMMIT" \
+  --source-ref "$EXPECTED_REF" --deny-self-hosted-runners
+```
+
+Record a green **Release → Run workflow** on `main`, including provenance generation
+and verification, in POK-616 after merge before the provenance acceptance criterion
+is complete. PR CI validates pins but intentionally cannot exercise OIDC signing.
 
 ## Owner setup before the first real publication
 
@@ -70,10 +89,14 @@ or automatic retry that could silently combine partial releases.
    under an unrelated name or create a tag merely to exercise publication.
 2. In PyPI configure a pending/trusted publisher: owner `pokanop`, repository
    `scriptkit`, workflow `release.yml`, environment `pypi`. No long-lived API token.
-3. Retain environment approval with prevent-self-review; add an independent human
-   reviewer with repository access. Restrict deployment tags to `v*`. Configure
-   trusted publishing on TestPyPI separately if desired (not implicitly enabled).
-4. Only after naming, publisher, reviewers and tag policy are confirmed, set the
+3. **Hard publication precondition:** retain `can_admins_bypass=false` and
+   prevent-self-review on `pypi`, and add an independent human reviewer with
+   repository access, distinct from the shared agent identity. The current sole
+   reviewer is the shared admin account, so it cannot approve its own runs.
+   Deployment tags must remain restricted to `v*`. Configure trusted publishing
+   on TestPyPI separately if desired (not implicitly enabled).
+4. Only after naming, publisher, independent reviewer, bypass-off and tag policy
+   are confirmed, set the
    repository variable `PYPI_PUBLISH_ENABLED=true`. It is absent/disabled by default.
 5. Create a version tag pointing to an approved commit on main. Publishing validates
    ancestry and exact metadata/tag equality. Inspect the Release run and approve the
@@ -82,7 +105,11 @@ or automatic retry that could silently combine partial releases.
 Branch protection must require `required-quality`, up-to-date branches, one approval,
 resolved conversations, and linear history, including administrators. The shared
 agent GitHub account cannot self-approve: an independent GitHub reviewer is required;
-do not relax protection to work around this. Tag rules prohibit non-maintainer tag
-creation and tag update/deletion. Repository admins remain the ultimate trust root
-and must not disable these controls. Live configuration evidence belongs in the
+do not relax protection to work around this. Tag rules restrict creation, update and
+deletion but explicitly allow the repository-admin role to bypass them; the shared
+agent token has that role (`current_user_can_bypass: always`). This is **not** an
+independent publishing approval boundary. The `pypi` environment has admin bypass
+disabled and requires independent approval, even for a tag made with ruleset bypass.
+Repository admins can still edit configuration and remain the ultimate trust root;
+they must not disable these controls. Live configuration evidence belongs in the
 issue handoff; inability to configure any control is a publication blocker.

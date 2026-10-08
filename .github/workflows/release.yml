@@ -13,6 +13,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   provenance:
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -26,7 +27,7 @@ jobs:
           name: release-dist
           path: dist
       - run: cd dist && sha256sum --check SHA256SUMS
-      - uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
         with:
           subject-path: 'dist/*'
       - name: Verify GitHub signed provenance
@@ -35,7 +36,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           for artifact in dist/*; do
-            gh attestation verify "$artifact" --repo "$REPOSITORY" --signer-workflow "$REPOSITORY/.github/workflows/release.yml" --source-digest "$GITHUB_SHA" --signer-digest "$GITHUB_SHA"
+            gh attestation verify "$artifact" --repo "$REPOSITORY" --signer-workflow "$REPOSITORY/.github/workflows/release.yml" --source-digest "$GITHUB_SHA" --signer-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --deny-self-hosted-runners
           done
 
   publish:
@@ -73,7 +74,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           for artifact in dist/*; do
-            gh attestation verify "$artifact" --repo "$REPOSITORY" --signer-workflow "$REPOSITORY/.github/workflows/release.yml" --source-digest "$GITHUB_SHA" --signer-digest "$GITHUB_SHA"
+            gh attestation verify "$artifact" --repo "$REPOSITORY" --signer-workflow "$REPOSITORY/.github/workflows/release.yml" --source-digest "$GITHUB_SHA" --signer-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --deny-self-hosted-runners
           done
           mkdir packages
           cp dist/*.whl dist/*.tar.gz packages/
