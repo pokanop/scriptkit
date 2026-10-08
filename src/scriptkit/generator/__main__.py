@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from scriptkit.contracts import ToolSpec
-from .transaction import StateConflict
+from .transaction import RecoveryConflict, StateConflict
 
 from . import apply, preview, recover, render
 
@@ -31,6 +31,9 @@ def main(argv: list[str] | None = None) -> int:
             apply(args.root, plan)
         print(plan.to_json(), end="")
         return 2 if plan.conflicts else int(args.check and plan.drift)
+    except RecoveryConflict as exc:
+        print(json.dumps(exc.report, sort_keys=True))
+        return 2
     except (ValueError, OSError, StateConflict) as exc:
         print(json.dumps({"error": str(exc)}, sort_keys=True))
         return 2

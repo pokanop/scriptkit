@@ -1,8 +1,9 @@
 # ScriptKit (working name)
 
 A dependency-light Python **3.11+** runtime for cohesive command-line tools.
-This repository ships the compatible 1.3.0 runtime and versioned data contracts,
-not the planned installer, manager, registry, generator or AI product.
+This repository ships the compatible 1.3.0 runtime, versioned data contracts,
+and an opt-in [deterministic project generator](docs/generator.md).
+The full installer, manager, registry and AI product remain under development.
 
 > The working name overlaps with [johnlindquist/kit](https://github.com/johnlindquist/kit),
 > a separate project. No affiliation is implied. `pokanop-scriptkit` is provisional

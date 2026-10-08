@@ -18,11 +18,20 @@ from typing import Protocol
 from scriptkit.contracts.codec import Record
 from scriptkit.contracts.models import constrained, record, unique
 
-from .plan import CONTROL, MANIFEST, Plan, read, target
+from .plan import CONTROL, MANIFEST, Change, Plan, read, target
+from .render import canonical
 
 
 class StateConflict(RuntimeError):
     """A generated file/base changed or another generator holds the lock."""
+
+
+class RecoveryConflict(StateConflict):
+    """Structured reconciliation evidence for every conflicting recovery target."""
+
+    def __init__(self, conflicts: list[dict[str, object]]) -> None:
+        self.report = {"error": "recovery conflict; journal retained", "conflicts": conflicts}
+        super().__init__(canonical(self.report).decode())
 
 
 @record
@@ -137,9 +146,22 @@ def decode(value: str | None) -> bytes | None:
 
 def finish(root: Path, journal: Journal, directory: Path, writer: Writer) -> None:
     # Validate every target before any writes, including when recovering.
+    conflicts: list[dict[str, object]] = []
     for op in journal.operations:
-        if read(root, op.path) not in (decode(op.before), decode(op.after)):
-            raise StateConflict(f"recovery conflict: {op.path}; journal retained")
+        current = read(root, op.path)
+        before, after = decode(op.before), decode(op.after)
+        if current not in (before, after):
+            conflicts.append(
+                {
+                    "path": op.path,
+                    "before_absent": before is None,
+                    "after_absent": after is None,
+                    "current_absent": current is None,
+                    "diff": Change(op.path, current, after).diff,
+                }
+            )
+    if conflicts:
+        raise RecoveryConflict(conflicts)
     for op in journal.operations:
         after = decode(op.after)
         current = read(root, op.path)
@@ -192,11 +214,10 @@ def recover(root: Path, *, writer: Writer | None = None) -> bool:
     Refuse recovery when any file matches neither its before nor after bytes.
     No timestamp-based guesses, imports, network or executable journal content.
     """
-    directory = control(root)
-    journal_path = directory / "journal.json"
-    if not journal_path.exists() and not journal_path.is_symlink():
-        return False
     with locked(root) as directory:
+        journal_path = directory / "journal.json"
+        if not journal_path.exists() and not journal_path.is_symlink():
+            return False
         if journal_path.is_symlink():
             raise ValueError("symlink journal refused")
         journal = Journal.from_json(journal_path.read_text(encoding="utf-8"))

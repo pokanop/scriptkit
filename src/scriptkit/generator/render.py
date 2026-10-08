@@ -50,9 +50,12 @@ def render(spec: ToolSpec, *, template_version: str = TEMPLATE_VERSION) -> Rende
     if (
         any(keyword.iskeyword(p) for p in [*parts, function])
         or parts[-1] in {"_handlers", "__init__"}
+        or function in {"argparse", "json", "_handlers", "vars", "int", "str", "__name__"}
         or len(parts) < 2
     ):
-        raise ValueError("entrypoint must be package.module:function, not a reserved module")
+        raise ValueError(
+            "entrypoint must be package.module:function, not a reserved module/function"
+        )
     resource = files("scriptkit.generator.resources").joinpath("template-v1.json").read_bytes()
     # Pin the exact resource, not just a mutable name.
     if sha256(resource) != TEMPLATE_SHA256:
@@ -61,6 +64,10 @@ def render(spec: ToolSpec, *, template_version: str = TEMPLATE_VERSION) -> Rende
     prefix = "src/" + "/".join(parts[:-1])
     mapping = {"spec": repr(spec.canonical_json()), "function": function}
     generated = {
+        ".gitattributes": Template(template["attributes"])
+        .substitute(launcher=f"{prefix}/{parts[-1]}.py")
+        .encode(),
+        ".scriptkit-generator/.gitignore": template["ignore"].encode(),
         "tool.json": spec.canonical_json().encode() + b"\n",
         "pyproject.toml": Template(template["project"])
         .substitute(
@@ -83,4 +90,4 @@ def render(spec: ToolSpec, *, template_version: str = TEMPLATE_VERSION) -> Rende
 
 
 # Updated deliberately with a new template version/migration, never at runtime.
-TEMPLATE_SHA256 = "75743482306aaa5dea68a2529fc96823a797ab88cb1961b4eb4a6ec045337540"
+TEMPLATE_SHA256 = "33188a922e18b180c7668c53cdc79f0ea2e011bec9d92e0c84d41950178a3568"

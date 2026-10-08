@@ -43,7 +43,7 @@ def test_deterministic_offline_backend_contract(tmp_path, spec, monkeypatch):
 
     inventory = {p: sha256(b) for p, b in (first.generated | first.user).items()}
     assert sha256(canonical(inventory)) == (
-        "b821761a2f262492c6c8badd636c66ffc15bab5389b796550c6986de70747962"
+        "aee0990447a1484c278f0af462a165f8790092143986bec13ce0e6ccbaf97b9e"
     )
     project = tomllib.loads(first.generated["pyproject.toml"].decode())
     assert project["project"]["scripts"][spec.name] == spec.entrypoint
@@ -164,11 +164,11 @@ class InterruptingWriter(AtomicWriter):
             raise KeyboardInterrupt
 
 
-@pytest.mark.parametrize("point", range(1, 8))
+@pytest.mark.parametrize("point", range(1, 10))
 def test_interrupted_apply_rolls_forward(tmp_path, spec, point):
     output = render(spec)
     plan = preview(tmp_path, output)
-    assert len(plan.changes) == 6
+    assert len(plan.changes) == 8
     with pytest.raises(KeyboardInterrupt):
         apply(tmp_path, plan, writer=InterruptingWriter(point))
     before = snapshot(tmp_path)

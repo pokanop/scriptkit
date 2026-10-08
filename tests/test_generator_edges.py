@@ -93,7 +93,7 @@ def test_repeated_interruption_during_recovery(tmp_path):
     output = render(example())
     with pytest.raises(KeyboardInterrupt):
         apply(tmp_path, preview(tmp_path, output), writer=Crash())
-    for _ in range(6):
+    for _ in range(8):
         with pytest.raises(KeyboardInterrupt):
             recover(tmp_path, writer=Crash())
     assert recover(tmp_path)

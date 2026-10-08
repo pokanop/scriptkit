@@ -15,7 +15,9 @@ python -m scriptkit.generator spec.json my-project --recover  # finish an interr
 Check exits 0 for clean, 1 for drift, 2 for conflict/error. All operational results
 are JSON. An interrupted transaction makes check return an error without recovery
 or mutation. Apply emits the applied preview; a subsequent check is clean.
-The root must already exist, and must not traverse symlinks. Input specs live
+The root must already exist. The root itself and components below it must not be
+symlinks/reparse points. Ancestors above the root are outside this boundary and
+may be symlinks (for example macOS `/tmp` or a synced-folder alias). Input specs live
 outside the generated `tool.json` unless you deliberately use that canonical copy.
 
 ## Ownership and architecture
@@ -27,9 +29,17 @@ outside the generated `tool.json` unless you deliberately use that canonical cop
 - `transaction.py`: injected `Writer` publication adapter, project lock and journal.
 - `__main__.py`: small CLI composition layer; no manager/registry/AI dependencies.
 
-Generated files are `tool.json`, `pyproject.toml`, and the entrypoint module.
+Generated files are `tool.json`, `pyproject.toml`, the entrypoint module,
+`.gitattributes`, and `.scriptkit-generator/.gitignore`. The attributes pin LF for
+generated files and the manifest, including in `core.autocrlf=true` clones. The
+control ignore file excludes locks, journals and staging, but keeps the manifest
+and ignore file versioned. Commit these ownership/VCS files with the project.
+Existing foreign `.gitattributes` files are not overwritten; generate in a new
+project or explicitly reconcile your VCS policy before adopting generation.
 The entrypoint must be `package.module:function` (nested packages supported);
-Python keywords, `_handlers` and `__init__` entrypoint modules are refused.
+Python keywords, `_handlers` and `__init__` entrypoint modules are refused, as are
+function names that shadow launcher dependencies (`argparse`, `json`, `_handlers`,
+`vars`, `int`, `str`, `__name__`).
 The generated argparse launcher invokes one explicit `_handlers.run(command,
 arguments)` function. It does not discover commands by importing modules.
 Argument dictionary keys retain spec spelling, including hyphens.
@@ -37,14 +47,17 @@ Argument dictionary keys retain spec spelling, including hyphens.
 Initializers and `_handlers.py` are **user owned**: created when absent and never
 overwritten or removed. Other existing files are untouched. New generated paths
 cannot silently adopt foreign files, even when bytes match. Generated files removed
-by a new spec are deleted only if their saved hashes still match. Empty directories
+by a new spec are deleted only if their saved hashes still match, or accepted as
+already converged if already absent. Likewise an owned file already equal to the
+proposal is converged, not a conflict. Foreign files are never adopted this way. Empty directories
 are retained. Ownership transfers and overlapping paths fail closed.
 
 `.scriptkit-generator/manifest.json` records generated SHA-256 hashes, user paths,
 normalized spec hash, schema version, template version and formatter version.
 Preview captures exact base bytes, including unchanged files. Apply rejects stale
 bases before publishing; modified/missing generated files produce explicit conflict
-records and current/proposed unified diffs. Resolve by preserving your handwritten
+records with `reason` (`modified`, `missing`, `foreign`) and current/proposed
+unified diffs. An identical foreign file has an empty diff but a `foreign` reason. Resolve by preserving your handwritten
 changes in user-owned files and restoring the generated base, not by deleting the
 manifest to force adoption. There is no overwrite/force escape hatch.
 
@@ -60,13 +73,54 @@ Recovery itself may be interrupted and retried. If a file matches neither before
 nor after, recovery refuses and retains the journal for manual reconciliation.
 It never overwrites that unexpected content or steals an active writer's lock.
 
+### Reconciling a recovery conflict
+
+`--recover` returns exit 2 with JSON `conflicts`: every conflicting path,
+`before_absent`, `after_absent`, `current_absent`, and a current→after unified diff.
+The Python API raises `RecoveryConflict` with the same dictionary in `.report`.
+No project files are written when this preflight finds a conflict.
+
+1. Stop other writers. Back up each conflicting file outside its generated path;
+   preserve handwritten work in a user-owned handler or a separate file.
+2. Choose whether to restore the exact before bytes or accept the exact after
+   bytes from the journal. If `before_absent` is true, moving the conflicting file
+   away restores the before state. If `after_absent` is true, moving it away
+   accepts the planned deletion. Do not delete the journal or manifest.
+3. For non-absent bytes, inspect/export the selected journal value without executing
+   it. For example, this prints the proposed UTF-8 text (use binary `write_bytes`
+   to a separate scratch file when exact non-text bytes are needed):
+
+```python
+import base64
+import json
+from pathlib import Path
+
+journal = json.loads(Path(".scriptkit-generator/journal.json").read_text())
+operation = next(op for op in journal["operations"] if op["path"] == "tool.json")
+proposed = operation["after"]  # use "before" to restore the original baseline
+if proposed is not None:
+    Path("proposal-review.txt").write_bytes(base64.b64decode(proposed, validate=True))
+```
+
+4. After reviewing the exported bytes and backing up your changes, restore the
+   chosen exact content at that one conflicting path. Repeat for all reported
+   conflicts, then rerun `--recover`. It validates every path again and completes
+   the same transaction; `--check` should then be clean. The journal is removed
+   only after successful completion. Never edit hashes to conceal a conflict.
+
+On permission/ownership errors (including POSIX `fchown` EPERM in shared projects),
+restore the required access or ask the file owner to perform recovery. The engine
+intentionally does not discard owner metadata or bypass permissions to proceed.
+
 This guarantees recoverability after process interruption, **not simultaneous
 multi-file visibility**: do not run a project with a pending journal. Readers do
 not take generator locks. Journal and targets are fsynced before publication, but
 directory fsync/power-loss durability is not promised. Parents/control state must
 be trusted; this is not a sandbox against hostile concurrent filesystem changes.
 Use one filesystem for the project. Windows modes are not ACLs. Existing POSIX
-mode/owner are preserved, new files are private; arrange Windows directory ACLs.
+mode/owner are preserved, new files intentionally use private 0600 permissions,
+including source files (not umask-derived). Owners may chmod sources for sharing;
+subsequent applies preserve that mode. Arrange Windows directory ACLs.
 
 ## Template versions and migrations
 

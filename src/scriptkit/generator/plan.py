@@ -8,7 +8,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from scriptkit.contracts.codec import Record
-from scriptkit.contracts.models import constrained, digest, path, record, unique, disjoint_paths
+from scriptkit.contracts.models import (
+    constrained,
+    digest,
+    record,
+    unique,
+    disjoint_paths,
+    PATH,
+    END,
+)
 
 from .render import Rendered, canonical, sha256
 
@@ -18,7 +26,10 @@ MANIFEST = CONTROL + "/manifest.json"
 
 @record
 class OwnedFile(Record):
-    path: str = path()
+    path: str = constrained(
+        pattern=rf"(?:{PATH}|^(?:\.gitattributes|\.scriptkit-generator/\.gitignore){END})",
+        maxLength=240,
+    )
     sha256: str = digest()
 
 
@@ -44,9 +55,13 @@ def target(root: Path, name: str) -> Path:
         OwnedFile(name, "0" * 64)
     if root.is_symlink() or not root.is_dir():
         raise ValueError("project root must be an existing non-symlink directory")
-    # Check every ancestor, including ancestors of the supplied root.
+    # Root is the trust boundary. Ancestors above it may legitimately be symlinks
+    # (macOS /tmp, synced folders); inspect only root and components below it.
     result = root / name
-    for part in [result, *result.parents]:
+    parts = [root]
+    for component in name.split("/"):
+        parts.append(parts[-1] / component)
+    for part in parts:
         if part.is_symlink():
             raise ValueError(f"symlink path refused: {name}")
         if part.exists() and getattr(part.lstat(), "st_file_attributes", 0) & (
@@ -71,6 +86,7 @@ class Change:
     before: bytes | None
     after: bytes | None
     conflict: bool = False
+    reason: str | None = None
 
     @property
     def diff(self) -> str:
@@ -108,6 +124,7 @@ class Plan:
                     {
                         "path": c.path,
                         "conflict": c.conflict,
+                        "reason": c.reason,
                         "diff": c.diff,
                         "before_sha256": sha256(c.before) if c.before is not None else None,
                         "after_sha256": sha256(c.after) if c.after is not None else None,
@@ -157,11 +174,18 @@ def preview(root: Path, rendered: Rendered) -> Plan:
                 changes.append(Change(name, None, user[name]))
             continue
         proposed = desired[name]
+        if name in old and current == proposed:
+            continue  # Already converged, including an already-removed owned file.
         conflict = (sha256(current) if current is not None else None) != old.get(name)
         if name not in old:
             conflict = current is not None  # Foreign files are never adopted implicitly.
         if current != proposed or conflict:
-            changes.append(Change(name, current, proposed, conflict))
+            reason = None
+            if conflict:
+                reason = (
+                    "foreign" if name not in old else "missing" if current is None else "modified"
+                )
+            changes.append(Change(name, current, proposed, conflict, reason))
     after = next_manifest.canonical_json().encode() + b"\n"
     bases[MANIFEST] = previous
     if previous != after:
