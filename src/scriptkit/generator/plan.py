@@ -151,7 +151,8 @@ def preview(root: Path, rendered: Rendered, *, upgrade: bool = False) -> Plan:
             == ("1.0.0", "2.0.0", "text-lf-1", "text-lf-1")
         ):
             raise ValueError(
-                "template/formatter migration requires an explicit supported migration"
+                "template/formatter migration requires an explicit supported migration; "
+                "for v1 tools use scriptkit template-upgrade PROJECT"
             )
     old = {f.path: f.sha256 for f in manifest.generated} if manifest else {}
     old_user = set(manifest.user) if manifest else set()

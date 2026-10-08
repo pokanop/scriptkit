@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import json
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,15 @@ from scriptkit.contracts import ToolSpec
 from scriptkit.contracts.models import CatalogRelease, CommandSpec
 from . import apply, preview, recover
 from .render import Rendered, canonical, sha256
-from .scaffolds import VERSION, collection, existing, installer, tool
+from .scaffolds import (
+    VERSION,
+    CONTROL_IGNORE,
+    INSTALLER_ATTRIBUTES,
+    collection,
+    existing,
+    installer,
+    tool,
+)
 
 COMMANDS = {"new-tool", "add-command", "template-upgrade", "new-collection", "generate-installer"}
 
@@ -48,10 +57,22 @@ def configure(commands: Any) -> None:
             parser.add_argument("--manager-version", required=True)
 
 
-def dispatch(args: argparse.Namespace) -> dict[str, object]:
+@dataclass(frozen=True)
+class AuthoringResult:
+    data: dict[str, Any]
+    human: str
+    exit_code: int = 0
+    error: str | None = None
+
+
+def dispatch(args: argparse.Namespace) -> AuthoringResult:
     root = args.project
     if args.recover:
-        return {"recovered": recover(root)}
+        recovered = recover(root)
+        return AuthoringResult(
+            {"recovered": recovered},
+            "Recovery complete." if recovered else "No interrupted transaction.",
+        )
     from .plan import MANIFEST, Manifest, read
 
     previous = read(root, MANIFEST)
@@ -90,18 +111,31 @@ def dispatch(args: argparse.Namespace) -> dict[str, object]:
             )
         else:
             rendered = Rendered(
-                pins,
-                {},
+                {**pins, ".scriptkit-generator/.gitignore": CONTROL_IGNORE},
+                {".gitattributes": INSTALLER_ATTRIBUTES},
                 VERSION,
                 "text-lf-1",
                 sha256(canonical({p: sha256(b) for p, b in pins.items()})),
             )
     plan = preview(root, rendered, upgrade=args.command == "template-upgrade")
-    if plan.conflicts:
-        raise ValueError("generation conflicts: " + plan.to_json())
-    if args.check and plan.drift:
-        raise ValueError("generation drift: " + plan.to_json())
-    if args.apply:
+    error = (
+        "generation conflicts"
+        if plan.conflicts
+        else "generation drift"
+        if args.check and plan.drift
+        else None
+    )
+    if args.apply and error is None:
         apply(root, plan)
-    result: dict[str, object] = json.loads(plan.to_json())
-    return result
+    summary = f"{len(plan.changes)} file change(s), {len(plan.conflicts)} conflict(s)."
+    if args.apply and error is None:
+        summary = "Applied: " + summary
+    details = [summary]
+    for change in plan.changes:
+        label = f"CONFLICT ({change.reason})" if change.conflict else "change"
+        details.append(f"{label}: {change.path}")
+        if change.diff:
+            details.append(change.diff.rstrip("\n"))
+    return AuthoringResult(
+        json.loads(plan.to_json()), "\n".join(details), int(error is not None), error
+    )

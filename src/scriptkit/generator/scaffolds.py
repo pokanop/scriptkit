@@ -12,6 +12,8 @@ from scriptkit.contracts.models import CatalogRelease
 from .render import Rendered, canonical, render, sha256
 
 VERSION = "2.0.0"
+INSTALLER_ATTRIBUTES = b"/*.json text eol=lf\n/install.py text eol=lf\n/.scriptkit-generator/manifest.json text eol=lf\n/.scriptkit-generator/.gitignore text eol=lf\n"
+CONTROL_IGNORE = b"/*\n!/.gitignore\n!/manifest.json\n"
 
 
 def tool(spec: ToolSpec, layout: str = "standalone") -> Rendered:
@@ -82,7 +84,7 @@ def tool(spec: ToolSpec, layout: str = "standalone") -> Rendered:
         f"        subprocess.run([sys.executable, '-m', {module!r}, flag], check=True)\n"
     ).encode()
     user[".github/workflows/test.yml"] = (
-        "name: Tool\non: [push, pull_request]\njobs:\n  test:\n    runs-on: ubuntu-latest\n"
+        "name: Tool\non: [push, pull_request]\npermissions:\n  contents: read\njobs:\n  test:\n    runs-on: ubuntu-latest\n"
         "    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n"
         "        with:\n          python-version: '3.11'\n"
         "      - run: python -m pip install . pytest build\n"
@@ -116,17 +118,22 @@ def installer(bootstrap_hash: str, wheel: str, wheel_hash: str, version: str) ->
         "manager-pins.json": canonical(pins),
         "install.py": (
             '"""Thin manager-only installer. Supply an independently obtained bootstrap.py."""\n'
-            "import argparse\nimport hashlib\nimport json\nfrom pathlib import Path\nimport subprocess\nimport sys\n\n"
+            "import argparse\nimport hashlib\nimport json\nfrom pathlib import Path\nimport subprocess\nimport sys\nimport tempfile\n\n"
             "parser = argparse.ArgumentParser(description=__doc__)\n"
             "parser.add_argument('--bootstrap', type=Path, required=True)\n"
             "parser.add_argument('--root', type=Path, required=True)\n"
             "args = parser.parse_args()\n"
             "pins = json.loads(Path(__file__).with_name('manager-pins.json').read_text(encoding='utf-8'))\n"
-            "if hashlib.sha256(args.bootstrap.read_bytes()).hexdigest() != pins['bootstrap_sha256']:\n"
+            "verified = args.bootstrap.read_bytes()\n"
+            "if hashlib.sha256(verified).hexdigest() != pins['bootstrap_sha256']:\n"
             "    parser.error('bootstrap SHA-256 mismatch')\n"
-            "raise SystemExit(subprocess.call([sys.executable, '-I', str(args.bootstrap),\n"
-            "    '--root', str(args.root), '--wheel', pins['wheel'], '--sha256', pins['sha256'],\n"
-            "    '--version', pins['version']]))\n"
+            "with tempfile.TemporaryDirectory(prefix='scriptkit-bootstrap-') as directory:\n"
+            "    bootstrap = Path(directory) / 'bootstrap.py'\n"
+            "    bootstrap.write_bytes(verified)\n"
+            "    status = subprocess.call([sys.executable, '-I', str(bootstrap),\n"
+            "        '--root', str(args.root), '--wheel', pins['wheel'], '--sha256', pins['sha256'],\n"
+            "        '--version', pins['version']])\n"
+            "raise SystemExit(status)\n"
         ).encode(),
     }
 
@@ -144,18 +151,19 @@ def collection(
         1, catalog.name, origin, Artifact("catalog.json", sha256(raw), len(raw)), expires_at
     )
     generated = {
+        ".scriptkit-generator/.gitignore": CONTROL_IGNORE,
         "catalog.json": raw,
         "registry.json": registry.canonical_json().encode() + b"\n",
         **pins,
     }
     user = {
-        ".gitattributes": b"/*.json text eol=lf\n/install.py text eol=lf\n/.scriptkit-generator/manifest.json text eol=lf\n",
+        ".gitattributes": INSTALLER_ATTRIBUTES,
         "README.md": (
             f"# {catalog.name}\n\nLocal catalog: catalog.json (versioned CatalogRelease contract).\n"
             "Copy referenced artifacts beside the catalog, preserving their relative paths and hashes.\n"
             "Run `python install.py --bootstrap /verified/bootstrap.py --root /manager/root`.\n"
-            "This installs ONLY the pinned manager. Publish catalog/artifacts at the pinned origin and register registry.json\n"
-            "it with explicit origin consent before selecting individual tools with scriptkit install.\n"
+            "This installs ONLY the pinned manager. Publish catalog/artifacts at the pinned origin.\n"
+            "Register registry.json with explicit origin consent before selecting tools with scriptkit install.\n"
         ).encode(),
     }
     return Rendered(generated, user, VERSION, "text-lf-1", sha256(generated["catalog.json"]))

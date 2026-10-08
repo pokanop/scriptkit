@@ -66,12 +66,20 @@ def tool_main(
             parser.print_help()
             return None
         if args.command == "doctor":
-            return {"python": platform.python_version(), "config": "valid", "tool": spec["name"]}
+            health = {"python": platform.python_version(), "config": "valid", "tool": spec["name"]}
+            return (
+                health
+                if context.policy.machine
+                else "\n".join(f"{key}: {value}" for key, value in health.items())
+            )
         if args.command == "config":
-            return config
+            return (
+                config if context.policy.machine else json.dumps(config, indent=2, sort_keys=True)
+            )
         values = vars(args).copy()
         for key in ("command", "config", "json"):
             values.pop(key)
+        values["config"] = config
         try:
             result = handler(args.command, values)
             if type(result) is int:

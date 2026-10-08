@@ -5,7 +5,9 @@ The public CLI offers `new-tool`, `add-command`, `template-upgrade`,
 fetches, package installs or network calls occur during generation. Supply
 versioned JSON contracts (examples are bundled in `scriptkit.contracts.resources`).
 Directories must already exist. Every command previews by default; `--apply`
-publishes through the existing journal/lock/hash-CAS engine. `--check` fails on
+publishes through the existing journal/lock/hash-CAS engine. Human previews show
+a summary, file names and readable unified diffs. Machine failures retain the
+structured plan in `data` with a concise `error` and nonzero exit. `--check` fails on
 drift. `--recover` rolls forward an interrupted transaction (other required
 arguments must still be supplied). Global `--json` produces the standard output
 envelope, including failures; authoring errors/drift/conflicts exit 1.
@@ -42,6 +44,8 @@ projects pointing to the old public wheel. No existing release is overwritten.
 Help, version, doctor and config are read-only. Bare invocation prints help,
 never invokes a handler. `doctor` validates optional `--config file.json` (a JSON
 object) and reports Python/tool health; `config` displays it without writing it.
+Every handler receives the validated object as `arguments["config"]` (empty
+when no config file is supplied); it cannot collide with a declared argument.
 Do not store secrets in examples or expose them through config output. Global
 `--json` opts into the framework envelope. Put handwritten behavior in
 `src/<package>/_handlers.py`; placeholders exit nonzero with actionable guidance.
@@ -89,7 +93,8 @@ scriptkit install collection-name/tool-name@1.0.0
 `generate-installer` takes the same manager pin flags in a separate directory,
 without catalog/origin/expiry. It generates only `install.py` and
 `manager-pins.json`. Both forms verify an independently obtained local
-`bootstrap.py` against its pinned digest, then delegate to it using isolated
+`bootstrap.py` against its pinned digest, copy those verified bytes into a private
+temporary directory, then delegate to that snapshot using isolated
 Python and explicit wheel/version/hash/root arguments. They contain no manager
 lifecycle implementation, discovery, sudo, PATH changes, or tool installation.
 The manager wheel must be a pinned HTTPS URL, matching the bootstrap contract.

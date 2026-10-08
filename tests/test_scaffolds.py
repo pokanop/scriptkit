@@ -131,7 +131,7 @@ def test_runtime(spec, tmp_path, capsys):
     assert tool_main(value, handler, ["--json", "unknown"]) == 2
     value["commands"] = [CommandSpec(1, "run", "", ()).to_dict()]
     assert tool_main(value, handler, ["run"]) == 0
-    assert calls == [("run", {})]
+    assert calls == [("run", {"config": {}})]
     assert tool_main(value, lambda *a: 7, ["run"]) == 7
 
     def placeholder(*args):
@@ -238,7 +238,9 @@ def test_argument_mapping(spec):
         tool_main(spec.to_dict(), lambda c, a: seen.append(a), ["run", "--dry-run", "--count", "9"])
         == 0
     )
-    assert seen == [{"target": "default", "count": 9, "format": "text", "dry-run": True}]
+    assert seen == [
+        {"target": "default", "count": 9, "format": "text", "dry-run": True, "config": {}}
+    ]
 
 
 @pytest.fixture(scope="module")
@@ -339,7 +341,7 @@ def test_installed_project(tmp_path, spec, layout, runtime_wheel):
     )
     assert json.loads(handled.stdout)["data"] == {
         "handled": "inspect",
-        "arguments": {"target": "sample"},
+        "arguments": {"target": "sample", "config": {}},
     }
     # Installed requirements resolved entirely from local wheels, no AI extras or keys.
     subprocess.run([str(python), "-m", "pip", "check"], check=True, capture_output=True)

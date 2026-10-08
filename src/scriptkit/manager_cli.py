@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 from pathlib import Path
 import platform
@@ -13,7 +12,7 @@ import uuid
 from scriptkit.bootstrap import Manager, default_root, read
 from scriptkit.contracts.catalog import Registry
 from scriptkit.contracts.models import Platform
-from scriptkit.output import OutputContext
+from scriptkit.output import CommandResult, OutputContext
 from scriptkit.registry.cache import VerifiedCache
 from scriptkit.registry.resolver import Resolver
 from scriptkit.registry.source import RegistryArtifactSource
@@ -60,8 +59,12 @@ def dispatch(args: argparse.Namespace, context: OutputContext) -> object:
     from .generator.cli import COMMANDS, dispatch as dispatch_authoring
 
     if args.command in COMMANDS:
-        result = dispatch_authoring(args)
-        return result if context.policy.machine else json.dumps(result, indent=2)
+        authored = dispatch_authoring(args)
+        return CommandResult(
+            data=authored.data if context.policy.machine else authored.human,
+            exit_code=authored.exit_code,
+            error=authored.error,
+        )
     root = args.root.resolve()
     if args.command == "doctor":
         import importlib.util
