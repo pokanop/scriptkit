@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -48,6 +49,10 @@ def target(root: Path, name: str) -> Path:
     for part in [result, *result.parents]:
         if part.is_symlink():
             raise ValueError(f"symlink path refused: {name}")
+        if part.exists() and getattr(part.lstat(), "st_file_attributes", 0) & (
+            stat.FILE_ATTRIBUTE_REPARSE_POINT
+        ):
+            raise ValueError(f"reparse point refused: {name}")
         if part != result and part.exists() and not part.is_dir():
             raise ValueError(f"parent is not a directory: {name}")
     return result
