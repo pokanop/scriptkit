@@ -1,11 +1,13 @@
 """Opt-in bounded HTTP adapters. No SDK, ambient proxy, redirect or logging hooks."""
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from hashlib import sha256
 import http.client
 import importlib
 import json
 import os
 import re
+from time import sleep
 from typing import Callable, Mapping, Protocol
 from urllib.parse import urlsplit
 
@@ -22,7 +24,7 @@ class Limits:
     tokens: int = 32768
     output_tokens: int = 4096
     retries: int = 0
-    timeout: float = 30
+    timeout: float = 120
 
     def __post_init__(self) -> None:
         if not (
@@ -30,7 +32,7 @@ class Limits:
             and 1 <= self.tokens <= 262144
             and 1 <= self.output_tokens <= 16384
             and 0 <= self.retries <= 3
-            and 0 < self.timeout <= 120
+            and 0 < self.timeout <= 600
         ):
             raise ProviderError("invalid provider limits")
 
@@ -107,14 +109,27 @@ def destination(provider: str, endpoint: str | None) -> str:
     )
 
 
+SECRET = re.compile(
+    r"-----BEGIN .*PRIVATE KEY|\bsk-[A-Za-z0-9_-]{16,}|"
+    r"\b(?i:api[_-]?key|password|secret|access[_-]?token)\w*\s*[=:]\s*"
+    r"[\"'][^\"'\s]{8,}[\"']"
+)
+
+
+def contains_secret(value: object) -> bool:
+    """Inspect raw strings, not JSON-escaped representations. Defense in depth only."""
+    if isinstance(value, str):
+        return SECRET.search(value) is not None
+    if isinstance(value, dict):
+        return any(contains_secret(item) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(contains_secret(item) for item in value)
+    return False
+
+
 def messages(context: Context, goal: str) -> list[dict[str, str]]:
-    text = context.canonical_json()
-    # Defense in depth, not a secret scanner. Explicit user inspection is still required.
-    if re.search(
-        r"-----BEGIN .*PRIVATE KEY|\bsk-[A-Za-z0-9_-]{16,}|"
-        r"(?i:api[_-]?key|password|secret|access[_-]?token)\s*[=:]\s*[\"']?[^\s\"']+",
-        text + goal,
-    ):
+    # Explicit user inspection remains required, including nonliteral secret values.
+    if contains_secret(context.to_dict()) or contains_secret(goal):
         raise ProviderError("possible secret in selected context/goal; remove it or edit manually")
     if not goal.strip() or len(goal.encode()) > 4096:
         raise ProviderError("goal must be nonempty and at most 4096 bytes")
@@ -150,13 +165,11 @@ class HTTPProvider:
     use_keyring: bool = False
     transport: Transport = field(default=http_post, repr=False)
     load_key: Callable[..., str] = field(default=credential, repr=False)
+    wait: Callable[[float], None] = field(default=sleep, repr=False)
     _requests: int = field(default=0, init=False, repr=False)
     _tokens: int = field(default=0, init=False, repr=False)
 
     def preview(self, context: Context) -> dict[str, object]:
-        from dataclasses import asdict
-        from hashlib import sha256
-
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}", self.model):
             raise ProviderError("explicit valid model name required")
         plan: dict[str, object] = {
@@ -197,6 +210,11 @@ class HTTPProvider:
         for attempt in range(self.limits.retries + 1):
             if self._requests >= self.limits.requests or self._tokens + cost > self.limits.tokens:
                 raise ProviderError("request/token budget exhausted; use manual editing")
+            if attempt:
+                # Only reached after a retryable status; check budgets before waiting.
+                # At most 1 + 2 + 4 seconds with the hard retry ceiling. Ctrl-C
+                # interrupts sleep without issuing or charging another request.
+                self.wait(2 ** (attempt - 1))
             self._requests += 1
             self._tokens += cost
             try:
@@ -229,11 +247,12 @@ class HTTPProvider:
                 )
                 if not isinstance(content, str):
                     raise ValueError
-                # Conservative byte cap avoids trusting provider-reported token usage.
+                # Provider-side output_tokens controls generation; the independent
+                # local byte cap protects the proposal contract, not token spend.
                 encoded = content.encode("utf-8")
                 if key and key in content:
                     raise ValueError
-                if len(encoded) > min(max_response_bytes, self.limits.output_tokens):
+                if len(encoded) > max_response_bytes:
                     raise ValueError
                 return encoded
             except (ValueError, TypeError, KeyError, IndexError, AttributeError):

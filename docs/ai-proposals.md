@@ -97,22 +97,34 @@ Proxies, redirects, cookies and automatic authentication discovery are disabled.
 The endpoint process itself is trusted; ScriptKit cannot stop it forwarding data.
 No automatic model downloads are requested. Context selection never crawls the
 repository/home directory and excludes `.env`, configuration and arbitrary files.
-A conservative common-secret check is defense in depth, NOT a reliable scanner:
-inspect every selected byte, including ToolSpec descriptions, before approval.
+A common-secret check inspects raw file/ToolSpec strings and the goal for PEM keys,
+`sk-` prefixes and quoted credential assignments of at least eight non-whitespace
+characters. Ordinary variable lookups and credential-related instructions are allowed.
+This is defense in depth, NOT a reliable scanner: inspect every selected byte,
+including ToolSpec descriptions, before approval.
 
 `--max-requests` defaults to 1 (hard ceiling 4), `--retries` to 0 (ceiling 3).
-Only HTTP 429/503 are retryable and each retry consumes BOTH budgets; there is no
-unbounded backoff or paid fallback. `--max-tokens` defaults to 32768 (ceiling 262144)
+Only HTTP 429/503 are retryable and each retry consumes BOTH budgets. Retries wait
+1, 2, then 4 seconds (at most 7 total), interruptible with Ctrl-C; exhausted budgets
+stop before waiting or sending. This fixed bounded backoff does not interpret
+`Retry-After`; long server-side rate-limit windows may still require a later explicit
+invocation. There is no unbounded backoff or paid fallback. `--max-tokens` defaults to 32768 (ceiling 262144)
 and reserves serialized request UTF-8 bytes + 1024 framing allowance + the entire
 output allowance on each attempt, even failures. This intentionally conservative
 estimate is not a price guarantee or account-wide quota. `--max-output-tokens`
-defaults to 4096 (ceiling 16384), is sent to the provider AND conservatively enforced
-as a response-content byte cap without trusting provider usage reports. Large
-contexts/proposals may therefore require a deliberate budget increase or smaller
-selection. Limits apply per CLI invocation/provider instance, not across invocations.
-`--timeout` is the socket inactivity timeout (default 30 seconds, ceiling 120), not
-a wall-clock inference deadline. Ctrl-C closes the connection, exits 130 and writes
-no proposal/project files; cancellation cannot reverse a charge already incurred.
+defaults to 4096 (ceiling 16384) and is sent to the provider as its generation-token
+cap. Local response validation independently enforces the 256 KiB proposal byte
+contract, not a token-count-as-bytes limit. Providers must be trusted to honor their
+token limits; byte checks cannot guarantee spending. Large contexts may require a
+deliberate budget increase or smaller selection. Limits apply per CLI invocation/
+provider instance, not across invocations.
+`--timeout` sets the non-streaming response wait (default 120 seconds, ceiling 600).
+Because no response bytes arrive during generation, it must cover model loading
+and inference as well as network latency. Set it higher for slow/local models.
+Underlying socket operations use this timeout; it is not an end-to-end deadline
+across retries. Ctrl-C closes the connection or interrupts backoff, exits 130 and
+writes no proposal/project files; cancellation/timeouts cannot reverse a charge
+already incurred.
 
 Preview hashes bind context, goal, model, destination and all limits. Stdout contains
 only versioned JSON (preview/proposal/review); diagnostics go to stderr, no animation.

@@ -84,7 +84,7 @@ def test_two_independent_wire_shapes(project, shape):
     url, body, headers, timeout, maximum = client.transport.calls[0]
     payload = json.loads(body)
     assert payload["model"] == "synthetic-model" and not payload["stream"]
-    assert timeout == 30 and maximum == MAX_RESPONSE * 8
+    assert timeout == 120 and maximum == MAX_RESPONSE * 8
     if shape == "openai":
         assert headers["Authorization"] == "Bearer synthetic-test-key"
         assert payload["max_completion_tokens"] == 4096
@@ -119,14 +119,18 @@ def test_recorded_failures_are_redacted(project, event):
 def test_budget_retry_and_repeated_call_caps(project):
     context = select(project, ())
     client = provider(context, limits=Limits(requests=2, retries=1))
+    waits = []
+    client.wait = waits.append
     client.transport = Recording((429, b""), (200, response(context, "openai")))
     client.propose(context, max_response_bytes=MAX_RESPONSE)
     assert len(client.transport.calls) == 2
+    assert waits == [1]
     with pytest.raises(ProviderError, match="budget"):
         client.propose(context, max_response_bytes=MAX_RESPONSE)
     for limits in [Limits(tokens=1), Limits(requests=1, retries=1)]:
         client = provider(context, limits=limits)
         client.transport = Recording((503, b""))
+        client.wait = lambda _: pytest.fail("must not wait when budgets are exhausted")
         with pytest.raises(ProviderError, match="budget"):
             client.propose(context, max_response_bytes=MAX_RESPONSE)
         assert len(client.transport.calls) <= 1
@@ -154,8 +158,13 @@ def test_invalid_wire_output(project, raw):
 def test_output_budget(project):
     context = select(project, ())
     client = provider(context, limits=Limits(output_tokens=1))
+    # Token caps are sent to the provider; local enforcement uses the byte contract.
+    raw = client.propose(context, max_response_bytes=MAX_RESPONSE)
+    assert len(raw) > 1
+    assert json.loads(client.transport.calls[0][1])["max_completion_tokens"] == 1
+    client = provider(context)
     with pytest.raises(ProviderError, match="output"):
-        client.propose(context, max_response_bytes=MAX_RESPONSE)
+        client.propose(context, max_response_bytes=len(raw) - 1)
 
 
 @pytest.mark.parametrize(
@@ -170,7 +179,7 @@ def test_output_budget(project):
         {"retries": -1},
         {"retries": 4},
         {"timeout": 0},
-        {"timeout": 121},
+        {"timeout": 601},
         {"timeout": float("nan")},
     ],
 )
@@ -242,6 +251,112 @@ def test_secret_and_goal_validation(project, goal):
     context = select(project, ())
     with pytest.raises(ProviderError):
         replace(provider(context), goal=goal).preview(context)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        'password = values.get("password")',
+        'token_secret: str = values["name"]',
+        "# see docs: api_key=optional",
+        "Prompt for the password: hidden input",
+        'password = "short"',
+    ],
+    ids=["lookup", "typed-lookup", "comment", "prompt", "short-literal"],
+)
+def test_nonsecret_credential_authoring_allowed(project, text):
+    handler = project / "src/demo/_handlers.py"
+    handler.write_text(text, encoding="utf-8")
+    context = select(project, ("src/demo/_handlers.py",))
+    client = provider(context)
+    assert replace(client, goal=text).preview(context)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        'password = "hunter2hunter2"',
+        "api_key = 'synthetic-secret'",
+        "-----BEGIN RSA PRIVATE KEY-----",
+        "sk-abcdefghijklmnopqrstuv",
+    ],
+    ids=["password", "api-key", "pem", "key-prefix"],
+)
+def test_raw_file_and_goal_secrets_refused(project, text):
+    context = select(project, ())
+    client = provider(context)
+    with pytest.raises(ProviderError, match="possible secret"):
+        replace(client, goal=text).preview(context)
+    handler = project / "src/demo/_handlers.py"
+    handler.write_text(text, encoding="utf-8")
+    with pytest.raises(ProviderError, match="possible secret"):
+        client.preview(select(project, ("src/demo/_handlers.py",)))
+    with pytest.raises(ProviderError, match="possible secret"):
+        client.preview(replace(context, spec=replace(context.spec, description=text)))
+
+
+@pytest.mark.parametrize("shape", ["openai", "ollama"])
+def test_ordinary_handler_above_token_count_bytes_is_reviewable(project, shape):
+    from scriptkit.ai import apply, parse_response, review
+    from scriptkit.conformance import validate
+
+    context = select(project, ("src/demo/_handlers.py",))
+    content = (
+        "def run(command, values):\n"
+        + "    # A business-logic handler can readily exceed the token cap in bytes.\n" * 80
+        + "    return {'answer': 42}\n"
+    )
+    proposed = Proposal(
+        1,
+        context.identity,
+        SpecDelta(None, ()),
+        (Patch("src/demo/_handlers.py", context.files[0].base_hash, content),),
+        (),
+    )
+    raw = proposed.canonical_json().encode()
+    assert len(raw) > Limits().output_tokens
+    envelope = json.loads(json.dumps(FIXTURES[shape]))
+    if shape == "openai":
+        envelope["choices"][0]["message"]["content"] = raw.decode()
+    else:
+        envelope["message"]["content"] = raw.decode()
+    client = provider(context, shape)
+    client.transport = Recording((200, json.dumps(envelope).encode()))
+    result = parse_response(client.propose(context, max_response_bytes=MAX_RESPONSE))
+    checked = review(project, context, result)
+    apply(project, context, result, approved_review_hash=checked.approval_hash)
+    assert (project / "src/demo/_handlers.py").read_text() == content
+    assert validate(project).valid
+
+
+def test_retry_backoff_bounded_and_interruptible(project):
+    context = select(project, ())
+    client = provider(context, limits=Limits(requests=4, retries=3, tokens=262144))
+    waits = []
+    client.wait = waits.append
+    client.transport = Recording(
+        (429, b""), (503, b""), (429, b""), (200, response(context, "openai"))
+    )
+    client.propose(context, max_response_bytes=MAX_RESPONSE)
+    assert waits == [1, 2, 4]
+    client = provider(context, limits=Limits(requests=2, retries=1))
+    client.transport = Recording((429, b""))
+
+    def interrupt(_):
+        raise KeyboardInterrupt
+
+    client.wait = interrupt
+    with pytest.raises(KeyboardInterrupt):
+        client.propose(context, max_response_bytes=MAX_RESPONSE)
+    assert len(client.transport.calls) == 1
+    assert client._requests == 1
+
+
+def test_long_nonstreaming_timeout_is_configurable(project):
+    context = select(project, ())
+    client = provider(context, limits=Limits(timeout=600))
+    client.propose(context, max_response_bytes=MAX_RESPONSE)
+    assert client.transport.calls[0][3] == 600
 
 
 def test_model_validation_and_approval_binding(project):

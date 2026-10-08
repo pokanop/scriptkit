@@ -35,7 +35,12 @@ def main(argv: list[str] | None = None) -> int:
     propose.add_argument("--max-tokens", type=int, default=32768)
     propose.add_argument("--max-output-tokens", type=int, default=4096)
     propose.add_argument("--retries", type=int, default=0)
-    propose.add_argument("--timeout", type=float, default=30)
+    propose.add_argument(
+        "--timeout",
+        type=float,
+        default=120,
+        help="non-streaming response wait in seconds (default 120, maximum 600)",
+    )
     propose.add_argument("--approve-disclosure", help="exact preview approval_hash")
     for name in ("review", "apply"):
         command = sub.add_parser(name)
