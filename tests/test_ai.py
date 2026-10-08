@@ -356,6 +356,142 @@ def test_drift_and_v1_rejected(project):
         selected(project)
 
 
+def test_source_walk_ignores_install_and_desktop_artifacts(project):
+    for name in ("demo.egg-info/PKG-INFO", "demo/.DS_Store", "demo/Helpers.txt"):
+        file = project / "src" / name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(b"not source")
+    context = selected(project)
+    before = snapshot(project)
+    checked = review(project, context, proposal(context))
+    assert snapshot(project) == before
+    assert not any("PKG-INFO" in path for path, _ in checked.plan.bases)
+    apply(project, context, proposal(context), approved_review_hash=checked.approval_hash)
+
+
+def test_ignored_artifacts_cannot_hide_symlinks(project):
+    artifact = project / "src/demo/.DS_Store"
+    try:
+        artifact.symlink_to(project / "tool.json")
+    except OSError:
+        pytest.skip("symlinks unavailable")
+    context = selected(project)
+    with pytest.raises(ValueError, match="symlink/reparse"):
+        review(project, context, proposal(context))
+
+
+def test_pytest_allowed_only_in_proposed_tests(project):
+    context = selected(project)
+    proposed = proposal(context)
+    test = "import pytest\n\ndef test_failure():\n    with pytest.raises(ValueError):\n        int('bad')\n"
+    proposed = replace(proposed, patches=(Patch(TEST, None, test),))
+    checked = review(project, context, proposed)
+    apply(project, context, proposed, approved_review_hash=checked.approval_hash)
+    context = selected(project)
+    # Runner permission must not leak into runtime modules, nor other dependencies.
+    for patch in (
+        Patch(HANDLER, context.files[0].base_hash, "import pytest\n"),
+        Patch(TEST, context.files[1].base_hash, "import undeclared\n"),
+        Patch(TEST, context.files[1].base_hash, "def invalid("),
+    ):
+        before = snapshot(project)
+        with pytest.raises(ValueError, match="static checks"):
+            review(project, context, replace(proposal(context), patches=(patch,)))
+        assert snapshot(project) == before
+
+
+@pytest.mark.parametrize("help_only", [False, True])
+def test_sanctioned_dependency_extensions_preserved(project, help_only):
+    from scriptkit.conformance.static import validate
+
+    metadata = project / "pyproject.toml"
+    extended = metadata.read_bytes().replace(b"dependencies = [", b'dependencies = ["Pillow>=10", ')
+    extended += b'\n[tool.scriptkit.conformance.imports]\nPIL = "Pillow"\n'
+    metadata.write_bytes(extended)
+    assert validate(project).valid
+    context = selected(project)
+    proposed = proposal(context)
+    proposed = replace(
+        proposed,
+        spec_delta=SpecDelta(None, proposed.spec_delta.command_help if help_only else ()),
+        patches=(
+            Patch(
+                HANDLER,
+                context.files[0].base_hash,
+                "import PIL\ndef run(command, values):\n    return {}\n",
+            ),
+        ),
+    )
+    checked = review(project, context, proposed)
+    assert dict(checked.plan.bases)["pyproject.toml"] == extended
+    assert not any(c.path == "pyproject.toml" for c in checked.plan.changes)
+    metadata.write_bytes(extended + b"\n")
+    with pytest.raises(ValueError, match="approval"):
+        apply(project, context, proposed, approved_review_hash=checked.approval_hash)
+    metadata.write_bytes(extended)
+    before = snapshot(project)
+    with pytest.raises(ValueError, match="generated drift"):
+        review(project, context, replace(proposed, spec_delta=SpecDelta("new description", ())))
+    assert snapshot(project) == before
+    apply(project, context, proposed, approved_review_hash=checked.approval_hash)
+    assert metadata.read_bytes() == extended
+    assert validate(project).valid
+
+
+@pytest.mark.parametrize("mutation", ["entrypoint", "runtime-pin", "other-file"])
+def test_dependency_exception_does_not_adopt_other_drift(project, mutation):
+    metadata = project / "pyproject.toml"
+    extended = metadata.read_bytes().replace(b"dependencies = [", b'dependencies = ["requests", ')
+    if mutation == "entrypoint":
+        extended = extended.replace(b"demo.cli:main", b"evil.cli:main")
+    elif mutation == "runtime-pin":
+        extended = extended.replace(b"pokanop-scriptkit==", b"other-runtime==")
+    else:
+        (project / "requirements.txt").write_bytes(b"foreign\n")
+    metadata.write_bytes(extended)
+    context = selected(project)
+    before = snapshot(project)
+    with pytest.raises(ValueError, match="generated drift"):
+        review(project, context, replace(proposal(context), spec_delta=SpecDelta(None, ())))
+    assert snapshot(project) == before
+
+
+@pytest.mark.parametrize(
+    "char",
+    ["\u061c", "\u200b", "\u200f", "\u202a", "\u202e", "\u2066", "\u2069", "\ufeff"],
+    ids=lambda c: f"U+{ord(c):04X}",
+)
+def test_trojan_source_rejected_in_all_proposal_text(project, char):
+    context = selected(project)
+    base = proposal(context).to_dict()
+    variants = []
+    import copy
+
+    for field in ("patch", "description", "help", "name", "dependency"):
+        raw = copy.deepcopy(base)
+        if field == "patch":
+            raw["patches"][0]["content"] = (
+                f"# access {char} hidden\ndef run(command, values):\n    return {{}}\n"
+            )
+        elif field == "description":
+            raw["spec_delta"]["description"] = "description" + char
+        elif field == "help":
+            raw["spec_delta"]["command_help"][0]["help"] += char
+        elif field == "name":
+            raw["spec_delta"]["command_help"][0]["name"] += char
+        else:
+            raw["dependency_suggestions"] = ["requests" + char]
+        variants.append(raw)
+    before = snapshot(project)
+    for raw in variants:
+        with pytest.raises(ValueError, match="Unicode format"):
+            parse_response(json.dumps(raw).encode())
+    assert snapshot(project) == before
+    # Pre-existing text can still be selected for remediation, without execution.
+    (project / HANDLER).write_bytes(("# old " + char + "\n").encode())
+    assert char in selected(project).files[0].content
+
+
 def test_cli(project, tmp_path_factory, capsys):
     out = tmp_path_factory.mktemp("inputs")
     assert main(["context", str(project), HANDLER, TEST, EXAMPLE]) == 0

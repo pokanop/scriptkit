@@ -1,6 +1,8 @@
 """Versioned, data-only AI boundary. Unknown fields are always rejected."""
 
 from hashlib import sha256
+import json
+import unicodedata
 
 from scriptkit.contracts import ToolSpec
 from scriptkit.contracts.codec import Record
@@ -71,6 +73,13 @@ class Proposal(Record):
         unique([p.path for p in self.patches], "patch paths")
         if len(self.patches) > 32 or len(self.canonical_json().encode()) > MAX_RESPONSE:
             raise ValueError("proposal budget exceeded")
+        # Human diff review must not be reordered/hidden by Unicode formatting.
+        # Inspect every text field (including future fields), not just Python patches.
+        if any(
+            unicodedata.category(char) == "Cf"
+            for char in json.dumps(self.to_dict(), ensure_ascii=False)
+        ):
+            raise ValueError("invisible Unicode format characters are forbidden in proposals")
 
 
 def parse_response(raw: bytes) -> Proposal:

@@ -4,9 +4,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from scriptkit.conformance.ownership import metadata_extension
 from scriptkit.conformance.static import validate
 from scriptkit.contracts import ToolSpec
-from scriptkit.generator.plan import Change, Plan, preview, read, target
+from scriptkit.generator.plan import MANIFEST, Manifest, Change, Plan, preview, read, target
 from scriptkit.generator.render import sha256
 from scriptkit.generator.scaffolds import existing, tool
 from scriptkit.generator.transaction import Writer, apply as apply_plan
@@ -58,10 +59,25 @@ def review(root: Path, context: Context, proposal: Proposal) -> Review:
             raise ValueError("spec delta may only describe existing commands")
         commands[change.name]["help"] = change.help
     generated = preview(root, tool(ToolSpec.from_dict(value), layout))
-    if generated.conflicts:
-        raise ValueError("generated drift: reconcile manually before AI review")
     bases = dict(generated.bases)
     changes = {c.path: c for c in generated.changes}
+    # Preserve sanctioned dependency additions only when rendering leaves the
+    # recorded metadata baseline unchanged. Never rewrite handwritten metadata.
+    metadata = changes.get("pyproject.toml")
+    manifest_raw = bases.get(MANIFEST)
+    if metadata is not None and metadata.conflict and manifest_raw is not None:
+        manifest = Manifest.from_json(manifest_raw.decode())
+        recorded = next((f.sha256 for f in manifest.generated if f.path == metadata.path), None)
+        if (
+            recorded is not None
+            and metadata.before is not None
+            and metadata.after is not None
+            and sha256(metadata.after) == recorded
+            and metadata_extension(spec, manifest.template, recorded, metadata.before)
+        ):
+            del changes[metadata.path]
+    if any(c.conflict for c in changes.values()):
+        raise ValueError("generated drift: reconcile manually before AI review")
     selected = {f.path: f for f in current.files}
     for patch in proposal.patches:
         if patch.path not in selected:
@@ -76,11 +92,12 @@ def review(root: Path, context: Context, proposal: Proposal) -> Review:
             changes[patch.path] = Change(patch.path, before, after)
 
     # Snapshot additional handwritten modules for conformance and approval binding.
-    # Walk without following links, checking each directory as a confined target.
+    # Ignore non-source artifacts, but never follow links/reparse points.
     def source_files(directory: Path) -> None:
         for file in sorted(directory.iterdir()):
             name = file.relative_to(root).as_posix()
-            target(root, name + "/sentinel" if file.is_dir() else name)
+            if file.is_symlink() or getattr(file.lstat(), "st_file_attributes", 0) & 0x400:
+                raise ValueError(f"symlink/reparse point refused: {name}")
             if file.is_dir():
                 source_files(file)
             elif file.suffix == ".py":
@@ -103,13 +120,9 @@ def review(root: Path, context: Context, proposal: Proposal) -> Review:
             file = target(stage, name)
             file.parent.mkdir(parents=True, exist_ok=True)
             file.write_bytes(data)
-        # Use the same static syntax/import rules for proposed tests, not a second scanner.
-        for patch in proposal.patches:
-            if patch.path.startswith("tests/"):
-                file = stage / "src" / "_ai_test_checks" / Path(patch.path).name
-                file.parent.mkdir(exist_ok=True)
-                file.write_bytes(patch.content.encode("utf-8"))
-        report = validate(stage)
+        # Tests use the same scanner, with pytest permitted only in explicit test files.
+        test_paths = tuple(p.path for p in proposal.patches if p.path.startswith("tests/"))
+        report = validate(stage, test_paths=test_paths)
         if not report.valid:
             raise ValueError(f"static checks rejected proposal: {report.to_data()}")
     return Review(

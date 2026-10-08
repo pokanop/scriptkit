@@ -30,15 +30,15 @@ def imports(text, module, is_package=False):
     package = module if is_package else module.rpartition(".")[0]
     for node in ast.walk(ast.parse(text)):
         if isinstance(node, ast.Import):
-            yield from (alias.name for alias in node.names)
+            yield from ((alias.name, False) for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
             base = (
                 importlib.util.resolve_name("." * node.level + (node.module or ""), package)
                 if node.level
                 else node.module
             )
-            yield base
-            yield from (base + "." + alias.name for alias in node.names)
+            yield base, True
+            yield from ((base + "." + alias.name, True) for alias in node.names)
         elif isinstance(node, ast.Call) and (
             isinstance(node.func, ast.Name)
             and node.func.id in {"__import__", "import_module"}
@@ -51,9 +51,9 @@ def imports(text, module, is_package=False):
                 or not isinstance(node.args[0], ast.Constant)
                 or not isinstance(node.args[0].value, str)
             ):
-                yield "FORBIDDEN_COMPUTED_IMPORT"
+                yield "FORBIDDEN_COMPUTED_IMPORT", False
             else:
-                yield importlib.util.resolve_name(node.args[0].value, package)
+                yield importlib.util.resolve_name(node.args[0].value, package), False
 
 
 # AI's project adapters compose established generator/conformance primitives.
@@ -64,8 +64,17 @@ AI_PROJECT_PORTS = {
         "scriptkit.generator.scaffolds": {"existing"},
     },
     "scriptkit.ai.review": {
+        "scriptkit.conformance.ownership": {"metadata_extension"},
         "scriptkit.conformance.static": {"validate"},
-        "scriptkit.generator.plan": {"Change", "Plan", "preview", "read", "target"},
+        "scriptkit.generator.plan": {
+            "MANIFEST",
+            "Manifest",
+            "Change",
+            "Plan",
+            "preview",
+            "read",
+            "target",
+        },
         "scriptkit.generator.render": {"sha256", "canonical"},
         "scriptkit.generator.scaffolds": {"existing", "tool"},
         "scriptkit.generator.transaction": {"Writer", "apply"},
@@ -76,8 +85,8 @@ AI_PROJECT_PORTS = {
 def violations(text, module, is_package=False):
     source = layer(module)
     errors = []
-    for target in imports(text, module, is_package):
-        if any(
+    for target, from_import in imports(text, module, is_package):
+        if from_import and any(
             target == port or target in {port + "." + name for name in symbols}
             for port, symbols in AI_PROJECT_PORTS.get(module, {}).items()
         ):
@@ -142,6 +151,9 @@ def test_checker_detects_regressions():
         ("import scriptkit.execution", "scriptkit.ai.review"),
         ("import scriptkit.registry", "scriptkit.ai.context"),
         ("from scriptkit.generator.scaffolds import installer", "scriptkit.ai.review"),
+        ("import scriptkit.generator.transaction", "scriptkit.ai.review"),
+        ("import scriptkit.generator.transaction as transaction", "scriptkit.ai.review"),
+        ("importlib.import_module('scriptkit.generator.transaction')", "scriptkit.ai.review"),
         ("import scriptkit.state", "scriptkit.contracts.models"),
         ("import scriptkit.registry", "scriptkit.manager.service"),
         ("import scriptkit.console", "scriptkit.manager.service"),
