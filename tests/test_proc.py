@@ -47,12 +47,16 @@ def test_run_check_raises():
 
 
 def test_run_input_passed():
-    res = proc.run([sys.executable, "-c", "import sys; print(sys.stdin.read().strip())"], input="echoed")
+    res = proc.run(
+        [sys.executable, "-c", "import sys; print(sys.stdin.read().strip())"], input="echoed"
+    )
     assert res.out == "echoed"
 
 
 def test_which():
-    assert proc.which(sys.executable.split("/")[-1]) or proc.which("python3") or proc.which("python")
+    assert (
+        proc.which(sys.executable.split("/")[-1]) or proc.which("python3") or proc.which("python")
+    )
     assert proc.which("definitely-not-a-real-binary-xyz") is False
 
 

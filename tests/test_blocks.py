@@ -20,7 +20,7 @@ BODY = 'export A="1"\nexport B="2"'
 
 # --- pure helpers ----------------------------------------------------------
 def test_render_block_shapes():
-    assert render_block(BEGIN, END, BODY) == f"{BEGIN}\nexport A=\"1\"\nexport B=\"2\"\n{END}\n"
+    assert render_block(BEGIN, END, BODY) == f'{BEGIN}\nexport A="1"\nexport B="2"\n{END}\n'
     assert render_block(BEGIN, END, "") == f"{BEGIN}\n{END}\n"
     # edge newlines are trimmed so the shape is stable / idempotent
     assert render_block(BEGIN, END, "\n\nx\n\n") == f"{BEGIN}\nx\n{END}\n"

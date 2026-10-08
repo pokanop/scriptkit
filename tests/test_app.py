@@ -36,8 +36,9 @@ def test_examples_block_bare_strings(no_color):
 def test_make_parser_help_has_identity(no_color, capsys):
     import pytest
 
-    parser = app.make_parser("mytool", "9.9.9", "a tagline", icon="🚀",
-                             examples=[("mytool go", "run it")])
+    parser = app.make_parser(
+        "mytool", "9.9.9", "a tagline", icon="🚀", examples=[("mytool go", "run it")]
+    )
     with pytest.raises(SystemExit):
         parser.parse_args(["--help"])
     out = capsys.readouterr().out

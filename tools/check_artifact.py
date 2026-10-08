@@ -11,12 +11,13 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 import tempfile
 import venv
 
+from verify_results import verify
 
-SMOKE = r'''
+
+SMOKE = r"""
 import importlib.metadata as metadata
 import importlib.util
 from pathlib import Path
@@ -35,7 +36,7 @@ assert sk.run_cli(lambda: True) == 0
 assert sk.run_cli(lambda: 7) == 7
 assert sk.Config("missing.json", defaults={"answer": 42}).load().get("answer") == 42
 sk.table(["name"], [["wheel"]])
-'''
+"""
 
 
 def main() -> None:
@@ -75,13 +76,21 @@ def main() -> None:
             ("def main(): raise KeyboardInterrupt", 130),
         ]:
             result = subprocess.run(
-                [str(python), "-I", "-c", "import scriptkit as sk\n" + source + "\nraise SystemExit(sk.run_cli(main))"],
-                cwd=work, env=env, capture_output=True,
+                [
+                    str(python),
+                    "-I",
+                    "-c",
+                    "import scriptkit as sk\n" + source + "\nraise SystemExit(sk.run_cli(main))",
+                ],
+                cwd=work,
+                env=env,
+                capture_output=True,
             )
             assert result.returncode == code, result
-        run(str(python), "-m", "pip", "install", "pytest>=8")
+        run(str(python), "-m", "pip", "install", "pytest==9.1.1")
         shutil.copytree(root / "tests", work / "tests")
-        run(str(python), "-I", "-m", "pytest", "-q", "tests")
+        run(str(python), "-I", "-m", "pytest", "-q", "tests", "--junitxml=results.xml")
+        verify(work / "results.xml")
         print(f"Installed wheel verified ({'rich' if args.rich else 'bare'}): {wheel.name}")
 
 
