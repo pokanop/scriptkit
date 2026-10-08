@@ -116,6 +116,11 @@ class BlockUpperLayers:
 sys.meta_path.insert(0, BlockUpperLayers())
 import scriptkit
 import scriptkit.contracts
+import scriptkit.safe_config
+import scriptkit.state
+import scriptkit.paths
+import scriptkit.regions
+import scriptkit.execution
 from scriptkit.contracts import ToolSpec, resource_text
 ToolSpec.from_json(resource_text('ToolSpec.example.json'))
 """,

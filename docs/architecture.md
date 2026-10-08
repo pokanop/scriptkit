@@ -6,6 +6,7 @@ Authoritative framework repository: https://github.com/pokanop/scriptkit.
 | Component / path | Ownership / dependency rule |
 | --- | --- |
 | Runtime: `src/scriptkit/{app,blocks,cli,config,console,doctor,proc,progress,style,tables,text}.py`, `__init__.py` | Existing 1.3.0 API, dependency-light, never imports manager/registry/generator/AI. |
+| Runtime IO: `safe_config.py`, `state.py`, `paths.py`, `regions.py`, `execution.py`, `_windows_job.py` | Opt-in strict/persistent/platform adapters; runtime-only imports. See [runtime IO](runtime-io.md). Composition roots inject these into upper-layer ports; no manager filesystem/sandbox semantics are implied. |
 | Composition root: `entrypoint.py`, `__main__.py` | Typed `main(argv: Sequence[str] \| None) -> int` injectable argument boundary. Help/version only. Do not put business logic here. |
 | Contracts: `scriptkit.contracts` (POK-617) | Versioned frozen records, strict codec, resource schemas/examples and injected ports; depends only on stdlib. See [contracts](contracts.md). |
 | Manager: future `scriptkit.manager` (POK-621/622) | Transaction orchestration; inject registry/platform adapters, not global services. |
