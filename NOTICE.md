@@ -13,7 +13,9 @@ Ten library test modules (`app`, `blocks`, `cli`, `cli_progress_tables`, `config
 from that same commit. The Rich-only rendering test now explicitly skips
 when Rich is absent. `tests/conftest.py` retains color isolation but removes
 consumer-tool loading and source-path injection. Consumer-specific tool,
-installer and template tests stay in pokanop/scripts.
+installer and template tests stay in pokanop/scripts. `docs/runtime.md` is
+adapted: its wiring, new-tool and test instructions now describe the installed
+standalone wheel rather than the consumer repository's bootstrap and templates.
 
 `tests/public_api_1_3_0.json` was generated from the original runtime, recording
 all public exports and inspectable callable signatures (CliError inherits

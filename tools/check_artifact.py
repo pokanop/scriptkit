@@ -58,9 +58,10 @@ def main() -> None:
         def run(*argv: str) -> None:
             subprocess.run(argv, cwd=work, env=env, check=True)
 
-        run(str(python), "-m", "pip", "install", "--no-deps", str(wheel))
         if args.rich:
-            run(str(python), "-m", "pip", "install", "rich>=13.9.4,<14")
+            run(str(python), "-m", "pip", "install", f"{wheel}[rich]")
+        else:
+            run(str(python), "-m", "pip", "install", "--no-deps", str(wheel))
         run(str(python), "-I", "-c", SMOKE, "rich" if args.rich else "bare")
         for launch in ([str(command)], [str(python), "-I", "-m", "scriptkit"]):
             run(*launch)

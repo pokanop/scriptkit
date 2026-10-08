@@ -1,9 +1,12 @@
 # 🧰 scriptkit — Shared CLI scaffolding
 
-**The common library every tool in this repo is built on: color, icons, semantic
-messages, prompts, progress, tables, three-tier config, subprocess handling,
-human-friendly formatting, and CLI dispatch — unified so every tool looks and
-behaves like it came from the same author.**
+> Adapted from `pokanop/scripts@458104a` for the standalone installed runtime.
+> See [provenance](../NOTICE.md). Consumer tools, installers and templates are
+> not included in this repository.
+
+**A common library for command-line tools: color, icons, semantic messages,
+prompts, progress, tables, three-tier config, subprocess handling,
+human-friendly formatting, and CLI dispatch.**
 
 `scriptkit` · Python 3.11+ · `rich` (optional, graceful fallback) · zero other deps
 
@@ -38,20 +41,25 @@ Python.
 
 ## How it's wired in
 
-Tools are extension-less scripts that run as `venv/bin/python <repo>/<tool>`, so the
-repo root (which holds the `scriptkit/` package) is automatically on `sys.path`.
-Each tool simply does `import scriptkit as sk`. No install step, no vendoring.
+Install the built wheel into the same Python environment that runs your tool.
+From this repository, with a Python 3.11+ virtual environment activated:
 
-The new-tool template adds an upward-search bootstrap so a tool works even when run
-from a symlink or another directory:
-
-```python
-_here = Path(__file__).resolve().parent
-for _base in (_here, *_here.parents):
-    if (_base / "scriptkit" / "__init__.py").exists():
-        sys.path.insert(0, str(_base)); break
-import scriptkit as sk
+```sh
+python -m pip install '.[dev]'
+python -m build
+python -m pip install dist/pokanop_scriptkit-1.3.0-py3-none-any.whl
+# Optional: install the wheel's declared Rich extra instead.
+python -m pip install 'dist/pokanop_scriptkit-1.3.0-py3-none-any.whl[rich]'
 ```
+
+Tools then use `import scriptkit as sk` from any working directory. Do not
+vendor the package, search parent directories or modify `sys.path`. Distribution
+metadata uses the provisional name `pokanop-scriptkit`; the import is `scriptkit`.
+No public package release or namespace availability is implied.
+
+`scriptkit --help` and `python -m scriptkit --version` expose the foundation's
+help/version CLI only, not an installer or generator. See the
+[compatibility policy](compatibility.md) for API and exit guarantees.
 
 ---
 
@@ -245,36 +253,64 @@ rules (`━━━ Section ━━━━━`) so sections look identical everywher
 
 ## Building a new tool
 
-> See **[AGENTS.md](../AGENTS.md)** for the complete recipe (registering in the
-> installer, requirements, docs, tests) and the conventions agents should follow.
+After installing the wheel, save this minimal example as `mytool.py` outside
+the framework checkout:
 
-```bash
-cp templates/tool_template.py mytool     # extension-less, house style
-chmod +x mytool
-$EDITOR mytool                            # rename toolname/TOOLNAME, add subcommands
-./mytool --help
+```python
+import sys
+import scriptkit as sk
+
+
+def main() -> int:
+    parser = sk.make_parser("mytool", "0.1.0", "Example installed-runtime tool")
+    sk.parse_args(parser)
+    sk.success("Ready")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(sk.run_cli(main))
 ```
 
-The template is a working CLI demonstrating every primitive (messages, a tracked
-loop, a table, config, subprocess, `CliError`, dispatch). It is covered by
-`tests/test_template.py` so it can't rot.
+Run `python mytool.py --help`, `python mytool.py --version` or `python mytool.py`
+using the environment where you installed the wheel. Add your handlers using
+the lifecycle APIs above; keep your application logic in your own project.
 
-Then register it in the `scripts` installer (`TOOLS` dict + `TOOL_NAMES`), add a
-`requirements/mytool.txt`, and a `docs/mytool.md` card.
+This foundation does not ship scaffold templates, an installer or a tool
+registry. Those are separate roadmap components, not files to copy from this
+checkout. See [component ownership and template resource strategy](architecture.md)
+and [contributor guidance](../CONTRIBUTING.md). Consumer-specific registration
+and migration belong to `pokanop/scripts`, not this runtime API.
 
 ---
 
 ## Tests
 
-```bash
-venv/bin/python -m pytest          # whole suite
+From this repository, with a virtual environment activated:
+
+```sh
+python -m pip install -e '.[dev,rich]'
+python -m pytest
+python -m mypy
+python -m build
+python tools/check_artifact.py dist/pokanop_scriptkit-1.3.0-py3-none-any.whl
+python tools/check_artifact.py dist/pokanop_scriptkit-1.3.0-py3-none-any.whl --rich
 ```
 
-- `tests/test_*.py` — scriptkit unit tests (color, config, proc, console, progress,
-  tables, cli) — all mockable, no network/subprocess side effects beyond local echo.
-- `tests/test_tools_characterization.py` — pins each tool's pure helpers and `--help`
-  so the shared-library refactor is provably non-breaking.
-- `tests/test_template.py` — keeps the new-tool scaffold healthy.
+- `tests/test_{app,blocks,cli,cli_progress_tables,config,console,doctor,proc,style,text}.py`
+  — inherited library tests, including local subprocess execution and temporary
+  config files. The interruption regression uses POSIX signals and skips on Windows.
+- `tests/test_compatibility.py` and `tests/public_api_1_3_0.json` — public exports,
+  signatures and exit semantics pinned to the original runtime.
+- `tests/test_entrypoint.py` — the standalone help/version command boundary.
+- `tools/check_artifact.py` — creates a clean environment outside the checkout,
+  installs the wheel, checks imports and actual command exits, and runs a copy
+  of the library suite. The two invocations verify bare and declared Rich-extra
+  installs without `requests`; the Rich-only rendering test skips in the bare run.
+
+Build/test dependency installation needs package-index access; runtime smoke
+operations are local and need no provider keys. Consumer-tool characterization
+and scaffold tests remain in `pokanop/scripts`; they are not part of this suite.
 
 ---
 
