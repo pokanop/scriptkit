@@ -9,6 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from scriptkit.bootstrap import cmd_launcher
+
 
 def launchers(
     tool: Path, bin_dir: Path, name: str, *, interpreter: str | None = None
@@ -29,17 +31,7 @@ def launchers(
         "sys.exit(subprocess.call(argv))\n"
     ).encode()
     if os.name == "nt":
-        # cmd expands these characters even inside quoted paths.
-        if any(c in str(loader) + interpreter for c in '%!\r\n"'):
-            raise ValueError("launcher paths cannot contain cmd expansion characters")
-        wrapper = (
-            "@echo off\r\nsetlocal\r\n"
-            'for /f "tokens=2 delims=:" %%c in (\'chcp\') do set "_sk_cp=%%c"\r\n'
-            "chcp 65001 >nul\r\n"
-            f'"{interpreter}" -I "{loader}" %*\r\n'
-            'set "_sk_exit=%errorlevel%"\r\n'
-            "chcp %_sk_cp% >nul\r\nexit /b %_sk_exit%\r\n"
-        ).encode()
+        wrapper = cmd_launcher(interpreter, loader).encode()
         command = bin_dir / (name + ".cmd")
     else:
         wrapper = f'#!/bin/sh\nexec {shlex.quote(interpreter)} -I {shlex.quote(str(loader))} "$@"\n'.encode()

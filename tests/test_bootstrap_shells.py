@@ -55,13 +55,24 @@ def release_server(tmp_path, built_wheel):
         server.server_close()
 
 
-def invocation(source, url, digest, args):
-    if os.name == "nt":
-        return ["pwsh", "-NoProfile", "-File", str(source / "install.ps1"), url, digest, *args]
-    return ["sh", str(source / "install.sh"), url, digest, *args]
+def invocation(shell, source, url, digest, args):
+    if shell != "sh":
+        return [
+            shell,
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(source / "install.ps1"),
+            url,
+            digest,
+            *args,
+        ]
+    return [shell, str(source / "install.sh"), url, digest, *args]
 
 
-def test_shell_clean_install_and_exit_codes(tmp_path, release_server, built_wheel):
+@pytest.mark.parametrize("shell", ["pwsh", "powershell.exe"] if os.name == "nt" else ["sh"])
+def test_shell_clean_install_and_exit_codes(tmp_path, release_server, built_wheel, shell):
     url, env, source, bootstrap = release_server
     root = tmp_path / "shell root café"
     digest = hashlib.sha256(bootstrap.read_bytes()).hexdigest()
@@ -75,7 +86,7 @@ def test_shell_clean_install_and_exit_codes(tmp_path, release_server, built_whee
         "--version",
         "1.3.0",
     ]
-    command = invocation(source, url + "bootstrap.py", digest, args)
+    command = invocation(shell, source, url + "bootstrap.py", digest, args)
     result = subprocess.run(command, env=env, capture_output=True, text=True, encoding="utf-8")
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads(result.stdout)["version"] == "1.3.0"
@@ -85,9 +96,42 @@ def test_shell_clean_install_and_exit_codes(tmp_path, release_server, built_whee
         [str(launcher), "--json", "doctor"], capture_output=True, text=True, encoding="utf-8"
     )
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["data"]["root"] == str(root)
+    assert json.loads(result.stdout)["data"]["root"] == str(root.resolve())
+    pointer = root / "manager-active.json"
+    previous = json.loads(pointer.read_text())["target"]
+    original_env = root / "manager-generations" / previous
+    original_receipt = (original_env / "manager-receipt.json").read_bytes()
+    for operation in (
+        [
+            "self-update",
+            "--wheel",
+            url + built_wheel.name,
+            "--sha256",
+            hashlib.sha256(built_wheel.read_bytes()).hexdigest(),
+            "--version",
+            "1.3.0",
+        ],
+        ["self-rollback"],
+        ["doctor"],
+    ):
+        result = subprocess.run(
+            [str(launcher), "--json", *operation],
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert json.loads(result.stdout)["ok"]
+        active = json.loads(pointer.read_text())
+        if operation[0] == "self-update":
+            assert active["target"] != previous
+            assert active["previous"] == previous
+        else:
+            assert active["target"] == previous
+    assert (original_env / "manager-receipt.json").read_bytes() == original_receipt
     result = subprocess.run(
-        invocation(source, url + "bootstrap.py", "0" * 64, args),
+        invocation(shell, source, url + "bootstrap.py", "0" * 64, args),
         env=env,
         capture_output=True,
         text=True,
@@ -96,7 +140,7 @@ def test_shell_clean_install_and_exit_codes(tmp_path, release_server, built_whee
     assert "SHA-256" in result.stderr
     exit_digest = hashlib.sha256(b"raise SystemExit(17)\n").hexdigest()
     result = subprocess.run(
-        invocation(source, url + "exit.py", exit_digest, []), env=env, capture_output=True
+        invocation(shell, source, url + "exit.py", exit_digest, []), env=env, capture_output=True
     )
     assert result.returncode == 17
     env["SCRIPTKIT_PYTHON"] = "scriptkit-python-not-installed"

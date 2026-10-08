@@ -11,6 +11,7 @@ from email.parser import Parser
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 import hashlib
+import errno
 import importlib
 import json
 import os
@@ -56,23 +57,36 @@ def locked(root: Path) -> Iterator[None]:
     if any(p.is_symlink() for p in (root, *root.parents)):
         raise ValueError("manager root must not contain symlinks")
     root.mkdir(parents=True, exist_ok=True)
-    for name in ("bootstrap.lock", "bin", "manager-generations", "manager-active.json"):
+    for name in (
+        "bootstrap.lock",
+        "bin",
+        "manager-generations",
+        "manager-active.json",
+        "manager-launchers.json",
+    ):
         if (root / name).is_symlink():
             raise ValueError("symlink manager state")
     with (root / "bootstrap.lock").open("a+b") as stream:
         stream.seek(0)
-        if os.name == "nt":
-            msvcrt = importlib.import_module("msvcrt")
+        try:
+            if os.name == "nt":
+                msvcrt = importlib.import_module("msvcrt")
 
-            if not stream.read(1):
-                stream.write(b"0")
-                stream.flush()
-            stream.seek(0)
-            msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
-        else:
-            import fcntl
+                if not stream.read(1):
+                    stream.write(b"0")
+                    stream.flush()
+                stream.seek(0)
+                msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
 
-            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            if exc.errno in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                raise OSError(
+                    "another manager operation is running; wait for it to finish, then retry"
+                ) from exc
+            raise
         try:
             yield
         finally:
@@ -101,10 +115,21 @@ def fetch(url: str) -> bytes:
     return raw
 
 
-def exclusive(path: Path, content: bytes) -> None:
-    if path.is_symlink() or (path.exists() and path.read_bytes() != content):
-        raise ValueError(f"refusing unrelated file: {path}")
-    if path.exists():
+def check_owned(path: Path, content: bytes, accepted: Sequence[str] = ()) -> None:
+    if path.is_symlink() or (
+        path.exists()
+        and path.read_bytes() != content
+        and hashlib.sha256(path.read_bytes()).hexdigest() not in accepted
+    ):
+        raise ValueError(
+            f"refusing unrelated or modified file: {path}; inspect it and move it aside "
+            "only if it is your obsolete ScriptKit launcher, then rerun bootstrap"
+        )
+
+
+def exclusive(path: Path, content: bytes, accepted: Sequence[str] = ()) -> None:
+    check_owned(path, content, accepted)
+    if path.exists() and path.read_bytes() == content:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(dir=path.parent)
@@ -114,9 +139,29 @@ def exclusive(path: Path, content: bytes) -> None:
             stream.flush()
             os.fsync(stream.fileno())
         os.chmod(temporary, 0o755)
-        os.link(temporary, path)
+        if path.exists():
+            # Only receipt-owned bytes may be replaced; foreign files fail closed.
+            check_owned(path, content, accepted)
+            os.replace(temporary, path)
+        else:
+            os.link(temporary, path)
     finally:
         Path(temporary).unlink(missing_ok=True)
+
+
+def cmd_launcher(python: str, loader: Path, *, utf8: bool = False) -> str:
+    """Shared stdlib-only Windows adapter, also usable by the tool installer."""
+    if any(c in python + str(loader) for c in '%!\r\n"'):
+        raise ValueError("launcher paths cannot contain cmd expansion characters")
+    options = "-I -X utf8" if utf8 else "-I"
+    return (
+        "@echo off\r\nsetlocal\r\n"
+        'for /f "tokens=2 delims=:." %%c in (\'chcp\') do set "_sk_cp=%%c"\r\n'
+        "chcp 65001 >nul\r\n"
+        f'"{python}" {options} "{loader}" %*\r\n'
+        'set "_sk_exit=%errorlevel%"\r\n'
+        "chcp %_sk_cp% >nul\r\nexit /b %_sk_exit%\r\n"
+    )
 
 
 def launcher_files(root: Path) -> dict[Path, bytes]:
@@ -137,16 +182,7 @@ def launcher_files(root: Path) -> dict[Path, bytes]:
         "sys.exit(subprocess.call(argv))\n"
     ).encode()
     if os.name == "nt":
-        if any(c in python + str(loader) for c in '%!\r\n"'):
-            raise ValueError("Windows launcher paths cannot contain cmd expansion characters")
-        wrapper = (
-            "@echo off\r\nsetlocal\r\n"
-            'for /f "tokens=2 delims=:" %%c in (\'chcp\') do set "_sk_cp=%%c"\r\n'
-            "chcp 65001 >nul\r\n"
-            f'"{python}" -I -X utf8 "{loader}" %*\r\n'
-            'set "_sk_exit=%errorlevel%"\r\n'
-            "chcp %_sk_cp% >nul\r\nexit /b %_sk_exit%\r\n"
-        )
+        wrapper = cmd_launcher(python, loader, utf8=True)
         name = "scriptkit.cmd"
     else:
         wrapper = (
@@ -165,7 +201,7 @@ class Manager:
         download: Callable[[str], bytes] = fetch,
         checkpoint: Callable[[str], None] = lambda phase: None,
     ):
-        self.root = Path(os.path.abspath(root))
+        self.root = root.resolve()
         self.execute = execute
         self.download = download
         self.checkpoint = checkpoint
@@ -177,9 +213,10 @@ class Manager:
             raise ValueError("exact stable version required")
         with locked(self.root):
             files = launcher_files(self.root)
+            ledger = self.root / "manager-launchers.json"
+            ownership = read(ledger)
             for path, content in files.items():
-                if path.is_symlink() or (path.exists() and path.read_bytes() != content):
-                    raise ValueError(f"refusing unrelated launcher: {path}")
+                check_owned(path, content, ownership.get(str(path), []))
             active = read(self.root / "manager-active.json")
             generation = uuid.uuid4().hex
             env = self.root / "manager-generations" / generation
@@ -217,7 +254,20 @@ class Manager:
             self.checkpoint("stage")
             self.execute([python, "-I", "-X", "utf8", "-m", "scriptkit", "--version"])
             self.execute([python, "-I", "-X", "utf8", "-m", "scriptkit", "--help"])
-            self.execute([python, "-I", "-X", "utf8", "-m", "scriptkit", "--json", "doctor"])
+            self.execute(
+                [
+                    python,
+                    "-I",
+                    "-X",
+                    "utf8",
+                    "-m",
+                    "scriptkit",
+                    "--root",
+                    str(self.root),
+                    "--json",
+                    "doctor",
+                ]
+            )
             self.checkpoint("smoke")
             receipt = {
                 "schema_version": 1,
@@ -227,8 +277,20 @@ class Manager:
                 "generation": generation,
             }
             publish(env / "manager-receipt.json", receipt)
+            # Persist both current and next hashes BEFORE replacing owned launchers.
+            # An interruption at any publication point remains repairable on rerun.
+            ownership = {
+                str(path): list(
+                    {hashlib.sha256(content).hexdigest()}
+                    | ({hashlib.sha256(path.read_bytes()).hexdigest()} if path.exists() else set())
+                )
+                for path, content in files.items()
+            }
+            publish(ledger, ownership)
+            self.checkpoint("launcher-ledger")
             for path, content in files.items():
-                exclusive(path, content)
+                exclusive(path, content, ownership[str(path)])
+                self.checkpoint("launcher-file")
             self.checkpoint("launchers")
             # The only activation commit. Interrupted staging cannot affect old state.
             publish(

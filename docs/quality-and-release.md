@@ -98,7 +98,12 @@ is complete. PR CI validates pins but intentionally cannot exercise OIDC signing
 4. Only after naming, publisher, independent reviewer, bypass-off and tag policy
    are confirmed, set the
    repository variable `PYPI_PUBLISH_ENABLED=true`. It is absent/disabled by default.
-5. Create a version tag pointing to an approved commit on main. Publishing validates
+5. **Before the first manager release, bump both distribution/runtime versions and
+   update versioned artifact references/tests.** Do not reuse `1.3.0`: the published
+   `runtime-1.3.0-7c17061` wheel already identifies different, runtime-only bytes.
+   Record the new version and release hashes in the release ticket. The publishing
+   workflow rejects `1.3.0`, even if metadata/tag equality would otherwise pass.
+   Create a version tag pointing to an approved commit on main. Publishing validates
    ancestry and exact metadata/tag equality. Inspect the Release run and approve the
    environment; independently download artifacts and verify their attestations.
 

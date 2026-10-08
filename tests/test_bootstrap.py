@@ -45,9 +45,14 @@ def test_generations_rollback_and_rerun(tmp_path):
     assert service.rollback() == second
     assert all("--no-index" in call and "--no-deps" in call for call in calls if "pip" in call)
     assert len(list((tmp_path / "manager-generations").iterdir())) == 2
+    doctor = next(call for call in calls if call[-1] == "doctor")
+    assert doctor[doctor.index("--root") + 1] == str(tmp_path.resolve())
 
 
-@pytest.mark.parametrize("phase", ["fetch", "stage", "smoke", "launchers", "activate"])
+@pytest.mark.parametrize(
+    "phase",
+    ["fetch", "stage", "smoke", "launcher-ledger", "launcher-file", "launchers", "activate"],
+)
 def test_interruption(tmp_path, phase):
     service, calls, digest = manager(tmp_path)
     first = service.install("https://example.org/tool.whl", digest, "1.3.0")
@@ -155,7 +160,7 @@ def test_symlinks_and_competition(tmp_path):
             pass
     (root / "bin").unlink()
     with b.locked(root):
-        with pytest.raises(OSError):
+        with pytest.raises(OSError, match="another manager operation"):
             with b.locked(root):
                 pass
 

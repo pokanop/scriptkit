@@ -53,7 +53,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
 
 
 def dispatch(args: argparse.Namespace, context: OutputContext) -> object:
-    root = Path(os.path.abspath(args.root))
+    root = args.root.resolve()
     if args.command == "doctor":
         import importlib.util
 
