@@ -59,6 +59,14 @@ def violations(text, module, is_package=False):
     source = layer(module)
     errors = []
     for target in imports(text, module, is_package):
+        # Bootstrap must remain independently downloadable, so the shared stdlib
+        # cmd template lives there. Only the launchers adapter may import it;
+        # importing Manager or another bootstrap symbol is still forbidden.
+        if module == "scriptkit.manager.launchers" and target in {
+            "scriptkit.bootstrap",
+            "scriptkit.bootstrap.cmd_launcher",
+        }:
+            continue
         if target.startswith("scriptkit.") or target == "scriptkit":
             # Narrow reusable IO adapters, never the whole runtime or provider layer.
             target_layer = layer(target)
@@ -88,7 +96,7 @@ def test_ownership_graph():
         if is_package:
             parts.pop()
         module = ".".join(["scriptkit", *parts])
-        if module in {"scriptkit.entrypoint", "scriptkit.__main__"}:
+        if module in {"scriptkit.entrypoint", "scriptkit.__main__", "scriptkit.manager_cli"}:
             continue  # composition roots alone may wire upper layers
         errors.extend(violations(path.read_text(encoding="utf-8"), module, is_package))
     assert not errors, "\n".join(errors)
@@ -105,6 +113,8 @@ def test_checker_detects_regressions():
         ("import scriptkit.state", "scriptkit.contracts.models"),
         ("import scriptkit.registry", "scriptkit.manager.service"),
         ("import scriptkit.console", "scriptkit.manager.service"),
+        ("from scriptkit.bootstrap import Manager", "scriptkit.manager.launchers"),
+        ("from scriptkit.bootstrap import cmd_launcher", "scriptkit.manager.service"),
         ("import scriptkit.execution", "scriptkit.registry.cache"),
         ("importlib.import_module('scriptkit.ai')", "scriptkit.app"),
         ("__import__(computed)", "scriptkit.app"),
