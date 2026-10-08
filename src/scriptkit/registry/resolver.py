@@ -6,48 +6,17 @@ import hashlib
 import time
 from collections.abc import Callable
 
-from scriptkit.contracts.codec import ContractError, Record
+from scriptkit.contracts.codec import ContractError
+from scriptkit.contracts.catalog import ResolvedPlan as ResolvedPlan
 from scriptkit.contracts.models import (
-    Artifact,
     CatalogRelease,
     InstallPlan,
     Platform,
-    constrained,
-    record,
 )
 
 from .archives import validate_archive
 from .cache import VerifiedCache
 from .trust import Registry, RegistryStore
-
-
-@record
-class ResolvedPlan(Record):
-    schema_version: int = constrained(const=1)
-    registry: Registry
-    installation: InstallPlan
-    source_kind: str = constrained(enum=["wheel", "legacy-scripts"])
-    lock_sha256: tuple[str, ...]
-    artifacts: tuple[Artifact, ...]
-
-    def validate(self) -> None:
-        plan = self.installation
-        locks = tuple(lock for lock in plan.release.locks if lock.platform == plan.platform)
-        expected_artifacts = (
-            plan.release.artifact,
-            *(p.artifact for lock in locks for p in lock.packages),
-        )
-        expected_hashes = tuple(
-            hashlib.sha256(lock.canonical_json().encode()).hexdigest() for lock in locks
-        )
-        suffix = ".whl" if self.source_kind == "wheel" else ".scripts.zip"
-        if (
-            self.registry.catalog.sha256 != plan.catalog_sha256
-            or self.lock_sha256 != expected_hashes
-            or self.artifacts != expected_artifacts
-            or not plan.release.artifact.path.endswith(suffix)
-        ):
-            raise ContractError("resolved plan provenance does not match installation")
 
 
 class Resolver:
