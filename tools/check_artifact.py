@@ -92,7 +92,15 @@ def main() -> None:
                 capture_output=True,
             )
             assert result.returncode == code, result
-        run(str(python), "-m", "pip", "install", "pytest==9.1.1", "jsonschema==4.26.0")
+        run(
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "pytest==9.1.1",
+            "jsonschema==4.26.0",
+            "build==1.6.1",
+        )
         shutil.copytree(root / "tests", work / "tests")
         shutil.copytree(root / "examples", work / "examples")
         for installer in ("install.sh", "install.ps1"):

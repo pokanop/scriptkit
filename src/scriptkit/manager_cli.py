@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 import platform
@@ -28,6 +29,9 @@ def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true", help="versioned machine output")
     parser.add_argument("--quiet", action="store_true")
     commands = parser.add_subparsers(dest="command")
+    from .generator.cli import configure as configure_authoring
+
+    configure_authoring(commands)
     commands.add_parser("doctor", help="inspect manager/Python/PATH without mutation")
     registry = commands.add_parser("registry").add_subparsers(dest="action", required=True)
     registry.add_parser("list")
@@ -53,6 +57,11 @@ def configure(parser: argparse.ArgumentParser) -> None:
 
 
 def dispatch(args: argparse.Namespace, context: OutputContext) -> object:
+    from .generator.cli import COMMANDS, dispatch as dispatch_authoring
+
+    if args.command in COMMANDS:
+        result = dispatch_authoring(args)
+        return result if context.policy.machine else json.dumps(result, indent=2)
     root = args.root.resolve()
     if args.command == "doctor":
         import importlib.util
