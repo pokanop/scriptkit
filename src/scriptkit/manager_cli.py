@@ -31,6 +31,9 @@ def configure(parser: argparse.ArgumentParser) -> None:
     from .generator.cli import configure as configure_authoring
 
     configure_authoring(commands)
+    from .conformance.cli import configure as configure_conformance
+
+    configure_conformance(commands)
     commands.add_parser("doctor", help="inspect manager/Python/PATH without mutation")
     registry = commands.add_parser("registry").add_subparsers(dest="action", required=True)
     registry.add_parser("list")
@@ -58,6 +61,10 @@ def configure(parser: argparse.ArgumentParser) -> None:
 def dispatch(args: argparse.Namespace, context: OutputContext) -> object:
     from .generator.cli import COMMANDS, dispatch as dispatch_authoring
 
+    if args.command == "validate":
+        from .conformance.cli import dispatch as dispatch_conformance
+
+        return dispatch_conformance(args, context)
     if args.command in COMMANDS:
         authored = dispatch_authoring(args)
         return CommandResult(
