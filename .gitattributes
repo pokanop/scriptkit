@@ -1,0 +1,2 @@
+# Pinned generator resources must retain identical bytes on every checkout.
+src/scriptkit/generator/resources/*.json text eol=lf
