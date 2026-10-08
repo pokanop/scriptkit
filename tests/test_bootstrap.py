@@ -14,12 +14,12 @@ import pytest
 from scriptkit import bootstrap as b
 
 
-def wheel_bytes(version="1.3.0", name="pokanop-scriptkit"):
+def wheel_bytes(version="1.3.0", name="pokanop-scriptkit", newline="\n"):
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w") as archive:
         archive.writestr(
             f"pokanop_scriptkit-{version}.dist-info/METADATA",
-            f"Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n",
+            f"Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n".replace("\n", newline),
         )
     return stream.getvalue()
 
@@ -69,7 +69,7 @@ def test_interruption(tmp_path, phase):
     service.install("https://example.org/tool.whl", digest, "1.3.0")
 
 
-@pytest.mark.parametrize("stage", [0, 1, 2, 3])
+@pytest.mark.parametrize("stage", [0, 1, 2, 3, 4])
 def test_child_failure_preserves_old(tmp_path, stage):
     service, calls, digest = manager(tmp_path)
     service.install("https://example.org/tool.whl", digest, "1.3.0")
@@ -104,6 +104,14 @@ def test_validation_ownership_and_missing_previous(tmp_path):
     with pytest.raises(ValueError, match="unrelated"):
         service.install("https://example.org/tool.whl", digest, "1.3.0")
     assert command.read_text() == "unrelated"
+
+
+def test_windows_metadata_newlines(tmp_path):
+    raw = wheel_bytes(newline="\r\n")
+    receipt = b.Manager(tmp_path, execute=lambda _: None, download=lambda _: raw).install(
+        "https://example.org/wheel", hashlib.sha256(raw).hexdigest(), "1.3.0"
+    )
+    assert receipt["version"] == "1.3.0"
 
 
 def test_wrong_identity(tmp_path):
@@ -247,11 +255,25 @@ def test_real_manager_install_repair_and_tool(tmp_path, built_wheel):
     command = root / "bin" / ("scriptkit.cmd" if os.name == "nt" else "scriptkit")
 
     def cli(*args):
-        result = subprocess.run([str(command), "--json", *args], capture_output=True, text=True)
+        result = subprocess.run(
+            [str(command), "--json", *args], capture_output=True, text=True, encoding="utf-8"
+        )
         assert result.returncode == 0, result.stdout + result.stderr
         return result
 
     assert json.loads(cli("doctor").stdout)["data"]["root"] == str(root)
+    if os.name == "nt":
+        legacy_console = subprocess.run(
+            'cmd /d /s /c "chcp 437 >nul & call "%SCRIPTKIT_TEST_COMMAND%" --json doctor & chcp"',
+            env={**os.environ, "SCRIPTKIT_TEST_COMMAND": str(command)},
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        lines = legacy_console.stdout.splitlines()
+        assert len(lines) == 2, (legacy_console.stdout, legacy_console.stderr)
+        assert json.loads(lines[0])["data"]["root"] == str(root), legacy_console.stderr
+        assert "437" in lines[-1]
     assert json.loads(cli("catalog", "local", "--offline").stdout)["data"] == ["local/hello@1.0.0"]
     cli("install", "local/hello@1.0.0", "--offline")
     tool = root / "bin" / ("hello.cmd" if os.name == "nt" else "hello")

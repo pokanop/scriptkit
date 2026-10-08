@@ -77,7 +77,9 @@ file (`export PATH=...` on Unix, `$env:PATH=...` on Windows). Source/dot-source
 that file yourself, or add the bin directory manually. Existing unrelated files
 are refused. This is opt-in integration, not automatic profile modification.
 Windows cmd launcher paths cannot contain `%`, `!`, quotes or newlines; spaces
-and non-ASCII are supported. Like other `.cmd` launchers, these are not a secure
+and non-ASCII are supported. Windows wrappers temporarily select UTF-8 parsing
+and restore the console code page afterward; manager Python uses explicit UTF-8
+mode even with isolated `-I` startup. Like other `.cmd` launchers, these are not a secure
 transport for untrusted shell metacharacters; use `python -m scriptkit` for that.
 
 ```sh
@@ -113,7 +115,8 @@ python3 -I bootstrap.py --root "$ROOT" --rollback
 
 Each attempt allocates a fresh manager generation, verifies wheel bytes and
 package/version identity, creates a new venv, installs offline with `--no-deps`,
-and smokes help/version. Only then is `manager-active.json` atomically replaced.
+and smokes help/version plus the manager doctor command (rejecting runtime-only
+releases). Only then is `manager-active.json` atomically replaced.
 That single commit records both active and previous generations; there is no
 partially committed multi-file activation journal to replay. An interrupted
 attempt before the commit leaves the old manager selected; after the commit the

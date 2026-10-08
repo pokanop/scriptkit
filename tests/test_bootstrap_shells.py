@@ -28,7 +28,7 @@ def release_server(tmp_path, built_wheel):
     bootstrap = Path(scriptkit.bootstrap.__file__)
     shutil.copy(bootstrap, tmp_path / "bootstrap.py")
     shutil.copy(built_wheel, tmp_path / built_wheel.name)
-    (tmp_path / "exit.py").write_text("raise SystemExit(17)\n")
+    (tmp_path / "exit.py").write_bytes(b"raise SystemExit(17)\n")
     certs = source / "tests/fixtures/bootstrap"
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(certs / "localhost.pem", certs / "localhost.key")
@@ -76,12 +76,14 @@ def test_shell_clean_install_and_exit_codes(tmp_path, release_server, built_whee
         "1.3.0",
     ]
     command = invocation(source, url + "bootstrap.py", digest, args)
-    result = subprocess.run(command, env=env, capture_output=True, text=True)
+    result = subprocess.run(command, env=env, capture_output=True, text=True, encoding="utf-8")
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads(result.stdout)["version"] == "1.3.0"
     assert not (root / "tools").exists()
     launcher = root / "bin" / ("scriptkit.cmd" if os.name == "nt" else "scriptkit")
-    result = subprocess.run([str(launcher), "--json", "doctor"], capture_output=True, text=True)
+    result = subprocess.run(
+        [str(launcher), "--json", "doctor"], capture_output=True, text=True, encoding="utf-8"
+    )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["data"]["root"] == str(root)
     result = subprocess.run(

@@ -14,7 +14,7 @@ if ! command -v "$python" >/dev/null 2>&1; then
     exit 1
 fi
 # -I ignores PYTHONPATH and user site; URL fetching and hashing need only stdlib.
-exec "$python" -I -c '
+exec "$python" -I -X utf8 -c '
 import hashlib, pathlib, runpy, sys, tempfile, urllib.parse, urllib.request
 url, digest, *args = sys.argv[1:]
 if sys.version_info < (3, 11):

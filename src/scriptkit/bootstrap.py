@@ -7,6 +7,7 @@ wheel hash out of band. Local state is private, trusted, user-owned storage.
 from __future__ import annotations
 
 import argparse
+from email.parser import Parser
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 import hashlib
@@ -130,7 +131,7 @@ def launcher_files(root: Path) -> dict[Path, bytes]:
         "if not re.fullmatch('[a-f0-9]{32}', target): sys.exit('invalid manager pointer')\n"
         "base = root / 'manager-generations' / target\n"
         f"python = base / {('Scripts/python.exe' if os.name == 'nt' else 'bin/python')!r}\n"
-        "argv = [str(python), '-I', '-m', 'scriptkit', *sys.argv[1:]]\n"
+        "argv = [str(python), '-I', '-X', 'utf8', '-m', 'scriptkit', *sys.argv[1:]]\n"
         "os.environ['SCRIPTKIT_ROOT'] = str(root)\n"
         "if os.name != 'nt': os.execv(str(python), argv)\n"
         "sys.exit(subprocess.call(argv))\n"
@@ -138,10 +139,19 @@ def launcher_files(root: Path) -> dict[Path, bytes]:
     if os.name == "nt":
         if any(c in python + str(loader) for c in '%!\r\n"'):
             raise ValueError("Windows launcher paths cannot contain cmd expansion characters")
-        wrapper = f'@echo off\r\n"{python}" -I "{loader}" %*\r\nexit /b %errorlevel%\r\n'
+        wrapper = (
+            "@echo off\r\nsetlocal\r\n"
+            'for /f "tokens=2 delims=:" %%c in (\'chcp\') do set "_sk_cp=%%c"\r\n'
+            "chcp 65001 >nul\r\n"
+            f'"{python}" -I -X utf8 "{loader}" %*\r\n'
+            'set "_sk_exit=%errorlevel%"\r\n'
+            "chcp %_sk_cp% >nul\r\nexit /b %_sk_exit%\r\n"
+        )
         name = "scriptkit.cmd"
     else:
-        wrapper = f'#!/bin/sh\nexec {shlex.quote(python)} -I {shlex.quote(str(loader))} "$@"\n'
+        wrapper = (
+            f'#!/bin/sh\nexec {shlex.quote(python)} -I -X utf8 {shlex.quote(str(loader))} "$@"\n'
+        )
         name = "scriptkit"
     return {loader: source, root / "bin" / name: wrapper.encode()}
 
@@ -181,18 +191,20 @@ class Manager:
             artifact.write_bytes(raw)
             with zipfile.ZipFile(artifact) as archive:
                 metadata = archive.read(f"pokanop_scriptkit-{version}.dist-info/METADATA").decode()
-                if (
-                    f"\nVersion: {version}\n" not in metadata
-                    or "\nName: pokanop-scriptkit\n" not in metadata
-                ):
+                headers = Parser().parsestr(metadata)
+                if headers.get_all("Version") != [version] or headers.get_all("Name") != [
+                    "pokanop-scriptkit"
+                ]:
                     raise ValueError("manager wheel identity mismatch")
             self.checkpoint("fetch")
-            self.execute([sys.executable, "-I", "-m", "venv", str(env)])
+            self.execute([sys.executable, "-I", "-X", "utf8", "-m", "venv", str(env)])
             python = str(python_at(env))
             self.execute(
                 [
                     python,
                     "-I",
+                    "-X",
+                    "utf8",
                     "-m",
                     "pip",
                     "--isolated",
@@ -203,8 +215,9 @@ class Manager:
                 ]
             )
             self.checkpoint("stage")
-            self.execute([python, "-I", "-m", "scriptkit", "--version"])
-            self.execute([python, "-I", "-m", "scriptkit", "--help"])
+            self.execute([python, "-I", "-X", "utf8", "-m", "scriptkit", "--version"])
+            self.execute([python, "-I", "-X", "utf8", "-m", "scriptkit", "--help"])
+            self.execute([python, "-I", "-X", "utf8", "-m", "scriptkit", "--json", "doctor"])
             self.checkpoint("smoke")
             receipt = {
                 "schema_version": 1,
@@ -235,7 +248,7 @@ class Manager:
             receipt = read(env / "manager-receipt.json")
             if not receipt:
                 raise ValueError("previous manager receipt missing")
-            self.execute([str(python_at(env)), "-I", "-m", "scriptkit", "--version"])
+            self.execute([str(python_at(env)), "-I", "-X", "utf8", "-m", "scriptkit", "--version"])
             publish(
                 self.root / "manager-active.json",
                 {"target": previous, "previous": active["target"]},

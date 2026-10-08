@@ -29,5 +29,5 @@ with tempfile.TemporaryDirectory(prefix="scriptkit-bootstrap-") as directory:
     sys.argv = [str(path), *args]
     runpy.run_path(str(path), run_name="__main__")
 '@
-& $python -I -c $code $BootstrapUrl $BootstrapSha256 @BootstrapArgs
+& $python -I -X utf8 -c $code $BootstrapUrl $BootstrapSha256 @BootstrapArgs
 exit $LASTEXITCODE
