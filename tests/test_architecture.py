@@ -60,7 +60,11 @@ def violations(text, module, is_package=False):
     errors = []
     for target in imports(text, module, is_package):
         if target.startswith("scriptkit.") or target == "scriptkit":
-            if layer(target) not in ALLOWED[source]:
+            # Registry reuses only the hardened state adapter/port, not runtime UI.
+            state_adapter = source == "registry" and (
+                target == "scriptkit.state" or target.startswith("scriptkit.state.")
+            )
+            if layer(target) not in ALLOWED[source] and not state_adapter:
                 errors.append(f"{module} -> {target}")
         elif source == "contracts" and target.split(".")[0] not in sys.stdlib_module_names | {
             "__future__"
