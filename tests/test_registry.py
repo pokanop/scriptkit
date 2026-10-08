@@ -204,8 +204,12 @@ def test_strict_catalog(fixture, change):
     "name", ["../evil.py", "/evil.py", "C:/evil.py", "a\\evil.py", "CON.py", "a./evil.py"]
 )
 def test_archive_paths(name):
+    # ZipInfo normalizes backslashes while writing on Windows. Patch both ZIP
+    # headers after creation so every platform receives the same hostile bytes.
+    safe_name = name.replace("\\", "/")
+    raw = archive({safe_name: b"pass"}).replace(safe_name.encode(), name.encode())
     with pytest.raises(ContractError):
-        validate_archive("bundle.scripts.zip", archive({name: b"pass"}))
+        validate_archive("bundle.scripts.zip", raw)
 
 
 def test_archive_policy():
