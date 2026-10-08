@@ -47,6 +47,8 @@ Legacy helpers keep their existing behavior.
 
 Validate authored tools with `scriptkit validate PROJECT`; see
 [conformance checks and installed assistant guidance](docs/conformance.md).
+Optional [AI proposals](docs/ai-proposals.md) provide explicit context preview,
+static review/diffs and hash-approved application, without running proposed code.
 Static checks never execute project code or certify it safe.
 
 See [runtime API](docs/runtime.md), [versioned contracts](docs/contracts.md),

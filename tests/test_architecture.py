@@ -56,10 +56,32 @@ def imports(text, module, is_package=False):
                 yield importlib.util.resolve_name(node.args[0].value, package)
 
 
+# AI's project adapters compose established generator/conformance primitives.
+# Provider/contracts modules still cannot access these layers (or manager/registry/runtime).
+AI_PROJECT_PORTS = {
+    "scriptkit.ai.context": {
+        "scriptkit.generator.plan": {"MANIFEST", "Manifest", "read", "target"},
+        "scriptkit.generator.scaffolds": {"existing"},
+    },
+    "scriptkit.ai.review": {
+        "scriptkit.conformance.static": {"validate"},
+        "scriptkit.generator.plan": {"Change", "Plan", "preview", "read", "target"},
+        "scriptkit.generator.render": {"sha256", "canonical"},
+        "scriptkit.generator.scaffolds": {"existing", "tool"},
+        "scriptkit.generator.transaction": {"Writer", "apply"},
+    },
+}
+
+
 def violations(text, module, is_package=False):
     source = layer(module)
     errors = []
     for target in imports(text, module, is_package):
+        if any(
+            target == port or target in {port + "." + name for name in symbols}
+            for port, symbols in AI_PROJECT_PORTS.get(module, {}).items()
+        ):
+            continue
         # Bootstrap must remain independently downloadable, so the shared stdlib
         # cmd template lives there. Only the launchers adapter may import it;
         # importing Manager or another bootstrap symbol is still forbidden.
@@ -114,6 +136,12 @@ def test_checker_detects_regressions():
         ("import scriptkit.manager", "scriptkit.conformance.static"),
         ("import scriptkit.conformance", "scriptkit.app"),
         ("import scriptkit.ai", "scriptkit.conformance.static"),
+        ("import scriptkit.generator", "scriptkit.ai.provider"),
+        ("import scriptkit.generator", "scriptkit.ai.contracts"),
+        ("import scriptkit.manager", "scriptkit.ai.review"),
+        ("import scriptkit.execution", "scriptkit.ai.review"),
+        ("import scriptkit.registry", "scriptkit.ai.context"),
+        ("from scriptkit.generator.scaffolds import installer", "scriptkit.ai.review"),
         ("import scriptkit.state", "scriptkit.contracts.models"),
         ("import scriptkit.registry", "scriptkit.manager.service"),
         ("import scriptkit.console", "scriptkit.manager.service"),
