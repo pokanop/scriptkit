@@ -96,9 +96,15 @@ def dispatch(args: argparse.Namespace) -> AuthoringResult:
         spec, layout = existing(root)
         if args.command == "add-command":
             command = CommandSpec.from_json(args.spec.read_text(encoding="utf-8"))
-            value = spec.to_dict()
-            value["commands"] = [c.to_dict() for c in spec.commands] + [command.to_dict()]
-            spec = ToolSpec.from_dict(value)
+            previous_command = next((c for c in spec.commands if c.name == command.name), None)
+            if previous_command is not None and previous_command != command:
+                raise ValueError(
+                    f"command {command.name!r} already exists with a different definition"
+                )
+            if previous_command is None:
+                value = spec.to_dict()
+                value["commands"] = [c.to_dict() for c in spec.commands] + [command.to_dict()]
+                spec = ToolSpec.from_dict(value)
         rendered = tool(spec, layout)
     else:
         pins = installer(args.bootstrap_sha256, args.wheel, args.wheel_sha256, args.manager_version)

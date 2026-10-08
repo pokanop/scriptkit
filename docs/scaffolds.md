@@ -4,6 +4,9 @@ The public CLI offers `new-tool`, `add-command`, `template-upgrade`,
 `new-collection`, and `generate-installer`. No AI extras, API keys, template
 fetches, package installs or network calls occur during generation. Supply
 versioned JSON contracts (examples are bundled in `scriptkit.contracts.resources`).
+For tool generation, adapt the bundled contract example's entrypoint to
+`example_tool.cli:main`: the generator requires `package.module:function`,
+while the general contract also permits single-module entrypoints.
 Directories must already exist. Every command previews by default; `--apply`
 publishes through the existing journal/lock/hash-CAS engine. Human previews show
 a summary, file names and readable unified diffs. Machine failures retain the
@@ -34,6 +37,8 @@ requirements, configuration example, smoke tests, CI workflow, README and
 `python bin/<name>`; explicitly `chmod +x` to execute them directly on Unix.
 New files retain the transaction engine's private 0600 policy. Both layouts are
 wheel-installable; extension-less launchers are a source-checkout convenience.
+`new-tool` defaults to `--layout standalone` on every invocation; supply
+`--layout repository` when regenerating an existing repository layout.
 
 **Pre-release caveat:** the public runtime-only 1.3.0 wheel does not contain these
 new APIs. Until the release owner bumps and publishes the manager-capable
@@ -47,7 +52,8 @@ object) and reports Python/tool health; `config` displays it without writing it.
 Every handler receives the validated object as `arguments["config"]` (empty
 when no config file is supplied); it cannot collide with a declared argument.
 Do not store secrets in examples or expose them through config output. Global
-`--json` opts into the framework envelope. Put handwritten behavior in
+`--json` opts into the framework envelope. Global flags precede the subcommand:
+use `example-tool --config cfg.json config`, not `example-tool config --config cfg.json`. Put handwritten behavior in
 `src/<package>/_handlers.py`; placeholders exit nonzero with actionable guidance.
 Handlers may return data, integer exit codes (legacy-compatible), or the runtime's
 `CommandResult`. Exceptions fail; interruption exits 130. Destructive handlers

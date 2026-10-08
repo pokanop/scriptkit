@@ -61,10 +61,23 @@ def test_cli_upgrade_add_preserves(tmp_path, spec, capsys):
     assert invoke(tmp_path, "template-upgrade", "--apply") == 0
     command = tmp_path / "command.json"
     command.write_text(CommandSpec(1, "extra", "Additional behavior", ()).canonical_json())
+    assert invoke(tmp_path, "add-command", "--spec", str(command), "--check") == 1
     assert invoke(tmp_path, "add-command", "--spec", str(command), "--apply") == 0
     assert handler.read_bytes() == original
     assert invoke(tmp_path, "template-upgrade", "--check") == 0
+    before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    for mode in ("--check", "--apply"):
+        capsys.readouterr()
+        assert invoke(tmp_path, "add-command", "--spec", str(command), mode) == 0
+        result = json.loads(capsys.readouterr().out)
+        assert result["data"]["changes"] == [] and result["ok"]
+        assert before == {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    command.write_text(CommandSpec(1, "extra", "Different behavior", ()).canonical_json())
+    before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
     assert invoke(tmp_path, "add-command", "--spec", str(command), "--apply") == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["error"] == "command 'extra' already exists with a different definition"
+    assert before == {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
     launcher = tmp_path / "src/demo/cli.py"
     launcher.write_text("# handwritten\n")
     assert invoke(tmp_path, "template-upgrade", "--apply") == 1

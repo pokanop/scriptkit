@@ -98,3 +98,59 @@ def test_config_reaches_handler(tmp_path, capsys):
         == 0
     )
     assert json.loads(capsys.readouterr().out) == {"limit": 17}
+
+
+@pytest.mark.parametrize("kind", ["generate-installer", "new-collection"])
+@pytest.mark.parametrize("unreadable", ["missing", "directory"])
+def test_installer_bootstrap_read_errors(tmp_path, kind, unreadable, capsys):
+    project = tmp_path / "project"
+    project.mkdir()
+    args = [
+        "--json",
+        kind,
+        str(project),
+        "--bootstrap-sha256",
+        "a" * 64,
+        "--wheel",
+        "https://example.org/manager.whl",
+        "--wheel-sha256",
+        "b" * 64,
+        "--manager-version",
+        "1.4.0",
+        "--apply",
+    ]
+    if kind == "new-collection":
+        catalog = tmp_path / "catalog.json"
+        catalog.write_text(resource_text("CatalogRelease.example.json"))
+        args += [
+            "--catalog",
+            str(catalog),
+            "--origin",
+            "https://example.org/",
+            "--expires-at",
+            "2000000000",
+        ]
+    assert main(args) == 0
+    capsys.readouterr()
+    bootstrap = tmp_path / "unreadable.py"
+    if unreadable == "directory":
+        bootstrap.mkdir()
+    root = tmp_path / "manager"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(project / "install.py"),
+            "--bootstrap",
+            str(bootstrap),
+            "--root",
+            str(root),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert "install.py: error: cannot read bootstrap:" in result.stderr
+    # OSError formats its filename with repr (escaped backslashes on Windows).
+    assert repr(str(bootstrap)) in result.stderr
+    assert "Traceback" not in result.stderr and not result.stdout
+    assert not root.exists()
