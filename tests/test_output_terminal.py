@@ -13,7 +13,7 @@ from scriptkit.output import OutputContext, OutputPolicy, TableData
 @pytest.mark.parametrize("rich", [False, True])
 def test_forced_color_on_pipe_without_animation(rich):
     out = OutputContext(
-        OutputPolicy(rich=rich), io.StringIO(), io.StringIO(), env={"FORCE_COLOR": ""}
+        OutputPolicy(rich=rich), io.StringIO(), io.StringIO(), env={"FORCE_COLOR": "1"}
     )
     out.emit("error", "bad")
     assert "\x1b[" in out.stderr.getvalue()

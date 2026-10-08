@@ -19,9 +19,10 @@ application's output flags. Flags are application-owned, not silently injected.
 - `machine=True` disables color, animation and prompts. `quiet=True` suppresses
   info/success and progress, but preserves warning/error and requested results.
 - Color precedence: machine / explicit `never`, explicit `always`, **presence**
-  of `NO_COLOR` (including empty), presence of `FORCE_COLOR` (including empty or
-  `0`), then stream TTY. NO_COLOR wins if both variables exist. This is the new
-  policy, not a retroactive change to legacy helpers.
+  of nonempty `NO_COLOR`, nonempty `FORCE_COLOR`, then stream TTY. Empty
+  environment values are ignored; `FORCE_COLOR=0` disables automatic color.
+  Nonempty NO_COLOR wins when both exist. Legacy helpers are unchanged (their
+  historical FORCE_COLOR=0 behavior differs from this opt-in standards policy).
 - Animation requires an actual stderr TTY, Rich, progress enabled and neither
   quiet nor machine mode. Forced color never forces animation on pipes.
   Monochrome terminals still get progress. Plain/no-Rich output has no animation.
@@ -61,9 +62,12 @@ text is not a machine contract; do not parse stderr.
 ## Command lifecycle
 
 `command.run(context, main)` calls a callback that **returns data**, producing
-exactly one envelope in machine mode. Do not also call `result`, `table` or
-`doctor` in that callback; those are standalone emitting APIs. Return
-`TableData.to_data()` to render a table result through this boundary.
+exactly one envelope in machine mode. Emitting `result`, `table` or `doctor`
+inside that callback is rejected before writing, producing one failure envelope.
+Return `TableData.to_data()` for tables, or `context.doctor_data(sections)` for
+checks. `CommandResult(data, exit_code, error)` (from `scriptkit.output`) carries
+structured data with a nonzero status; a plain integer return is result data.
+Standalone emitting APIs remain usable outside the boundary.
 
 In machine mode Python `print`/argparse help on stdout is redirected to stderr.
 Argparse stderr is also bound to context diagnostics. Help/version exit 0 with
@@ -94,7 +98,8 @@ threads share one display; the first active caller chooses its columns until
 the last task exits. Handles support thread-safe `advance`, including harmless
 late updates after closure. Context managers remove tasks on success, failure,
 Ctrl-C and generator closure. They do not start/cancel workers: callers own
-worker cancellation and joining; no new daemon threads are introduced.
+worker cancellation and joining. Rich owns a daemon refresh thread while its
+live display is active; the context stops that display when its final task exits.
 
 ## Verification
 

@@ -21,7 +21,10 @@ Color = Literal["auto", "always", "never"]
 
 
 def _tty(stream: TextIO) -> bool:
-    return stream.isatty()
+    try:
+        return stream.isatty()
+    except (AttributeError, OSError, ValueError):
+        return False
 
 
 @dataclass(frozen=True)
@@ -46,12 +49,20 @@ class OutputPolicy:
             return False
         if self.color == "always":
             return True
-        # Presence is intentional, including empty values. NO_COLOR wins.
-        if "NO_COLOR" in env:
+        if env.get("NO_COLOR"):
             return False
-        if "FORCE_COLOR" in env:
-            return True
+        if env.get("FORCE_COLOR"):
+            return env["FORCE_COLOR"] != "0"
         return _tty(stream)
+
+
+@dataclass(frozen=True)
+class CommandResult:
+    """Data plus process status for command.run; integers alone remain data."""
+
+    data: object = None
+    exit_code: int = 0
+    error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -106,6 +117,7 @@ class OutputContext:
     _lock: Any = field(default_factory=threading.RLock, init=False)
     _progress: Any = field(default=None, init=False)
     _tasks: int = field(default=0, init=False)
+    _in_command: bool = field(default=False, init=False)
 
     def console(self, *, diagnostic: bool = False) -> Any:
         """Get this context's shared Rich console, or None without Rich.
@@ -131,6 +143,7 @@ class OutputContext:
                             color_system="standard" if color else None,
                             no_color=not color,
                             markup=False,
+                            emoji=False,
                             highlight=False,
                         )
                 self._consoles[diagnostic] = console
@@ -145,7 +158,7 @@ class OutputContext:
         text = self._literal(text)
         console = self.console(diagnostic=diagnostic)
         if console is not None:
-            console.print(text, style=style)
+            console.print(text, style=style, soft_wrap=True)
         else:
             stream = self.stderr if diagnostic else self.stdout
             codes = {
@@ -175,6 +188,10 @@ class OutputContext:
         Quiet suppresses diagnostics, never explicitly requested result data.
         """
         if self.policy.machine:
+            if self._in_command:
+                raise ValueError(
+                    "return data or CommandResult from command callbacks; do not emit results"
+                )
             payload = json.dumps(
                 {"schema_version": 1, "ok": ok, "data": data, "error": error},
                 ensure_ascii=self.policy.ascii,
@@ -282,8 +299,8 @@ class OutputContext:
             raise ValueError("input required (EOF)")
         return value.strip() or default or ""
 
-    def doctor(self, sections: Mapping[str, Sequence[Check]]) -> int:
-        """Render explicit checks without probing host state or printing banners."""
+    def doctor_data(self, sections: Mapping[str, Sequence[Check]]) -> CommandResult:
+        """Build a data-only report for command.run without emitting anything."""
         data = {
             title: [
                 {"label": c.label, "state": c.state, "detail": c.detail, "hint": c.hint}
@@ -292,8 +309,13 @@ class OutputContext:
             for title, checks in sections.items()
         }
         failed = any(c.state == "fail" for checks in sections.values() for c in checks)
+        return CommandResult(data, int(failed), "checks failed" if failed else None)
+
+    def doctor(self, sections: Mapping[str, Sequence[Check]]) -> int:
+        """Standalone emitting report; use doctor_data inside command.run."""
+        report = self.doctor_data(sections)
         if self.policy.machine:
-            self.result(data, ok=not failed, error="checks failed" if failed else None)
+            self.result(report.data, ok=report.exit_code == 0, error=report.error)
         else:
             for title, checks in sections.items():
                 self._text(title, diagnostic=False, style=self.theme.heading)
@@ -302,4 +324,4 @@ class OutputContext:
                         f"{check.state}: {check.label}: {check.detail} {check.hint}".rstrip(),
                         diagnostic=False,
                     )
-        return int(failed)
+        return report.exit_code

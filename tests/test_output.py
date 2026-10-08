@@ -29,6 +29,7 @@ def context(**options):
         {"NO_COLOR": "1"},
         {"FORCE_COLOR": ""},
         {"FORCE_COLOR": "1"},
+        {"FORCE_COLOR": "0"},
         {"NO_COLOR": "", "FORCE_COLOR": "1"},
     ],
 )
@@ -36,7 +37,10 @@ def context(**options):
 def test_color(tty, env, color):
     stream = Terminal() if tty else io.StringIO()
     expected = color == "always" or (
-        color == "auto" and "NO_COLOR" not in env and ("FORCE_COLOR" in env or tty)
+        color == "auto"
+        and not env.get("NO_COLOR")
+        and env.get("FORCE_COLOR") != "0"
+        and (bool(env.get("FORCE_COLOR")) or tty)
     )
     assert OutputPolicy(color=color).use_color(stream, env) == expected
     assert not OutputPolicy(machine=True, color=color).use_color(stream, env)

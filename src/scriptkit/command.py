@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 from contextlib import nullcontext, redirect_stderr, redirect_stdout
 from typing import Any
 
-from .output import OutputContext
+from .output import CommandResult, OutputContext
 
 
 def parse_args(
@@ -38,6 +38,8 @@ def run(context: OutputContext, main: Callable[[], Any]) -> int:
     Unexpected errors are surfaced as error 1 without a traceback. Applications
     must redact sensitive exception messages before crossing this boundary.
     """
+    if context._in_command:
+        raise ValueError("nested command.run is not supported")
     code = 0
     data = None
     error = None
@@ -47,16 +49,28 @@ def run(context: OutputContext, main: Callable[[], Any]) -> int:
             redirect_stderr(context.stderr),
         ):
             try:
-                data = main()
+                context._in_command = True
+                try:
+                    data = main()
+                finally:
+                    context._in_command = False
+                if isinstance(data, CommandResult):
+                    code, error, data = data.exit_code, data.error, data.data
             except SystemExit as exc:
                 code = exc.code if isinstance(exc.code, int) else (0 if exc.code is None else 1)
-                error = "usage error" if code else None
+                error = (
+                    str(exc.code)
+                    if not isinstance(exc.code, (int, type(None)))
+                    else ("usage error" if code == 2 else f"exited with status {code}")
+                    if code
+                    else None
+                )
             except KeyboardInterrupt:
                 code, error = 130, "Interrupted"
             except Exception as exc:
                 if isinstance(exc, BrokenPipeError):
                     raise
-                code, error = 1, str(exc)
+                code, error = 1, str(exc) or type(exc).__name__
         if error:
             context.emit("error", error)
         if context.policy.machine:
