@@ -11,11 +11,11 @@ from scriptkit.execution import BoundedRunner
 __all__ = ["PackageBackend", "PipBackend", "UvBackend"]
 
 
-def run(argv: list[str]) -> None:
+def run(argv: list[str], *, timeout: float = 120) -> None:
     # No user pip configuration, implicit indexes, user site or inherited Python paths.
     env = {k: v for k, v in os.environ.items() if not k.startswith(("PYTHON", "PIP_", "UV_"))}
     env.update(PYTHONNOUSERSITE="1", PIP_CONFIG_FILE=os.devnull)
-    BoundedRunner().run(argv, check=True, timeout=120, env=env)
+    BoundedRunner().run(argv, check=True, timeout=timeout, env=env)
 
 
 def interpreter(environment: Path) -> Path:
@@ -25,11 +25,17 @@ def interpreter(environment: Path) -> Path:
 class PipBackend:
     """stdlib venv + bundled pip: no external executable or bootstrap download."""
 
+    def __init__(self, *, timeout: float = 120):
+        self.timeout = timeout
+
+    def _run(self, argv: list[str]) -> None:
+        run(argv, timeout=self.timeout)
+
     def stage(self, environment: Path, wheels: tuple[Path, ...]) -> Path:
-        run([sys.executable, "-I", "-m", "venv", "--copies", str(environment)])
+        self._run([sys.executable, "-I", "-m", "venv", "--copies", str(environment)])
         python = interpreter(environment)
         if wheels:
-            run(
+            self._run(
                 [
                     str(python),
                     "-I",
@@ -44,18 +50,19 @@ class PipBackend:
                     *map(str, wheels),
                 ]
             )
-            run([str(python), "-I", "-m", "pip", "--isolated", "check"])
+            self._run([str(python), "-I", "-m", "pip", "--isolated", "check"])
         return python
 
 
-class UvBackend:
+class UvBackend(PipBackend):
     """Optional adapter; uv must already be provisioned by the host, not downloaded."""
 
-    def __init__(self, executable: Path):
+    def __init__(self, executable: Path, *, timeout: float = 120):
+        super().__init__(timeout=timeout)
         self.executable = executable.resolve(strict=True)
 
     def stage(self, environment: Path, wheels: tuple[Path, ...]) -> Path:
-        run(
+        self._run(
             [
                 str(self.executable),
                 "--no-config",
@@ -69,13 +76,14 @@ class UvBackend:
         )
         python = interpreter(environment)
         if wheels:
-            run(
+            self._run(
                 [
                     str(self.executable),
                     "--no-config",
                     "pip",
                     "install",
                     "--offline",
+                    "--link-mode=copy",
                     "--no-index",
                     "--no-deps",
                     "--python",
@@ -83,5 +91,7 @@ class UvBackend:
                     *map(str, wheels),
                 ]
             )
-            run([str(self.executable), "--no-config", "pip", "check", "--python", str(python)])
+            self._run(
+                [str(self.executable), "--no-config", "pip", "check", "--python", str(python)]
+            )
         return python

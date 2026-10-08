@@ -64,7 +64,7 @@ class FastBackend:
         return interpreter(environment)
 
 
-def fixture(tmp_path, *, wheel=False, backend=None, fail=False):
+def fixture(tmp_path, *, wheel=False, backend=None, fail=False, payload=None):
     host = Platform(
         {"Linux": "linux", "Darwin": "macos", "Windows": "windows"}[platform.system()],
         {"amd64": "x86_64", "x86_64": "x86_64", "arm64": "arm64", "aarch64": "arm64"}[
@@ -72,7 +72,9 @@ def fixture(tmp_path, *, wheel=False, backend=None, fail=False):
         ],
     )
     python = PythonRequirement("3.11.0", "3.99.0")
-    payload = 'def main():\n    print("working")\n    return ' + ("1" if fail else "0") + "\n"
+    payload = payload or (
+        'def main():\n    print("working")\n    return ' + ("1" if fail else "0") + "\n"
+    )
     entries = {"hello.py": payload}
     if wheel:
         entries.update(
@@ -206,7 +208,9 @@ def test_smoke_failure_keeps_previous(tmp_path):
     other.mkdir()
     failing, bad = fixture(other, fail=True)
     manager.source = failing.source
-    with pytest.raises(Exception):
+    from scriptkit.cli import CliError
+
+    with pytest.raises(CliError):
         manager.install(update(bad))
     assert manager._active("hello") == "first"
     assert invoke(manager) == "working"

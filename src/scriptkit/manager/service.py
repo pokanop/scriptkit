@@ -37,8 +37,8 @@ class Installer:
         backend: PackageBackend | None = None,
         checkpoint: Callable[[str], None] = lambda phase: None,
     ):
-        self.root = root.absolute()
-        self.bin_dir = bin_dir.absolute()
+        self.root = Path(os.path.abspath(root))
+        self.bin_dir = Path(os.path.abspath(bin_dir))
         self.source = source
         self.backend = backend or PipBackend()
         self.checkpoint = checkpoint
@@ -56,6 +56,46 @@ class Installer:
 
     def _files(self, name: str) -> dict[Path, bytes]:
         return launchers.launchers(self._tool(name), self.bin_dir, name)
+
+    def _ownership(self, name: str) -> dict[str, str]:
+        tool = self._tool(name)
+        record = storage.read(tool / "launchers.json")
+        if record is None:
+            # Compatibility with receipts published before the independent ledger.
+            active = self._active(name)
+            record = (
+                storage.read(tool / "generations" / active / "receipt.json") if active else None
+            )
+        return {
+            os.path.abspath(p): digest for p, digest in (record or {}).get("launchers", {}).items()
+        }
+
+    def _launcher_digests(self, name: str) -> dict[str, str]:
+        files = self._files(name)
+        launchers.check_owned(files, self._ownership(name))
+        return {
+            str(p): hashlib.sha256(p.read_bytes() if p.exists() else data).hexdigest()
+            for p, data in files.items()
+        }
+
+    def _preflight(self, resolved: ResolvedPlan) -> None:
+        plan = resolved.installation
+        tool = self._tool(plan.release.tool.name)
+        if storage.read(tool / "journal.json") is not None:
+            raise StateConflict("pending activation; recover before dry-run")
+        active = self._active(plan.release.tool.name)
+        if active != plan.previous_generation:
+            raise StateConflict("plan lineage is stale")
+        if active is not None:
+            old = storage.read(tool / "generations" / active / "receipt.json")
+            if old is None or (
+                old["resolved"]["registry"]["namespace"],
+                old["resolved"]["registry"]["origin"],
+            ) != (resolved.registry.namespace, resolved.registry.origin):
+                raise ValueError("namespace cannot take ownership of another registry's tool")
+        generation = tool / "generations" / plan.generation
+        if generation.exists() or generation.is_symlink():
+            raise FileExistsError("generation already exists; choose an unused generation")
 
     def _active(self, name: str) -> str | None:
         state = storage.read(self._tool(name) / "active.json") or {"target": None}
@@ -93,7 +133,9 @@ class Installer:
         paths = [a.path.casefold() for a in resolved.artifacts]
         if len(set(paths)) != len(paths):
             raise ValueError("artifact paths collide")
-        launchers.check_owned(self._files(plan.release.tool.name))
+        launchers.check_owned(
+            self._files(plan.release.tool.name), self._ownership(plan.release.tool.name)
+        )
 
     def install(
         self,
@@ -106,6 +148,7 @@ class Installer:
         self.validate(resolved)
         self.checkpoint("validate")
         if dry_run:
+            self._preflight(resolved)
             self.source.authorize(resolved)
             return None
         plan = resolved.installation
@@ -113,16 +156,7 @@ class Installer:
         tool = self._tool(name)
         with storage.locked(self.root):
             self._recover(name)
-            if self._active(name) != plan.previous_generation:
-                raise StateConflict("plan lineage is stale")
-            active = self._active(name)
-            if active is not None:
-                old = storage.read(tool / "generations" / active / "receipt.json")
-                if old is None or (
-                    old["resolved"]["registry"]["namespace"],
-                    old["resolved"]["registry"]["origin"],
-                ) != (resolved.registry.namespace, resolved.registry.origin):
-                    raise ValueError("namespace cannot take ownership of another registry's tool")
+            self._preflight(resolved)
             self.source.authorize(resolved)
             artifacts = [(a, self.source.fetch(a)) for a in resolved.artifacts]
             for artifact, raw in artifacts:
@@ -169,9 +203,7 @@ class Installer:
                 "resolved": resolved.to_dict(),
                 "installed_at": int(time.time()),
                 "files": self._inventory(generation),
-                "launchers": {
-                    str(p): hashlib.sha256(b).hexdigest() for p, b in self._files(name).items()
-                },
+                "launchers": self._launcher_digests(name),
             }
             storage.publish(generation / "receipt.json", receipt)
             self._activate(name, plan.generation)
@@ -193,7 +225,7 @@ class Installer:
 
     def _activate(self, name: str, target: str | None) -> None:
         tool = self._tool(name)
-        launchers.check_owned(self._files(name))
+        launchers.check_owned(self._files(name), self._ownership(name))
         if target is not None:
             self._verify_generation(tool, target)
         storage.publish(tool / "journal.json", {"target": target, "previous": self._active(name)})
@@ -211,9 +243,13 @@ class Installer:
             if not isinstance(target, str) or re.fullmatch(NAME, target) is None:
                 raise ValueError("invalid journal target")
             self._verify_generation(tool, target)
-            launchers.ensure(self._files(name))
+            # Persist the actual accepted bytes (or bytes about to be published)
+            # before linking: recovery can recognize partially published launchers.
+            digests = self._launcher_digests(name)
+            storage.publish(tool / "launchers.json", {"launchers": digests})
+            launchers.ensure(self._files(name), digests)
         else:
-            launchers.check_owned(self._files(name))
+            launchers.check_owned(self._files(name), self._ownership(name))
         storage.publish(tool / "active.json", {"target": target})
         self.checkpoint("pointer")
         if target is None:
@@ -255,6 +291,9 @@ class Installer:
         Retention makes uninstall safe for running Windows processes and enables
         explicit recovery. Garbage collection is a separate administrative operation.
         """
+        if not self._tool(name).exists():
+            return
         with storage.locked(self.root):
             self._recover(name)
-            self._activate(name, None)
+            if self._active(name) is not None or any(p.exists() for p in self._files(name)):
+                self._activate(name, None)

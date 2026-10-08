@@ -194,11 +194,19 @@ def test_uv_commands_are_offline(tmp_path, monkeypatch):
     executable = tmp_path / "uv"
     executable.touch()
     commands = []
-    monkeypatch.setattr(adapters, "run", commands.append)
-    adapter = adapters.UvBackend(executable)
+    timeouts = []
+
+    def capture(argv, *, timeout):
+        commands.append(argv)
+        timeouts.append(timeout)
+
+    monkeypatch.setattr(adapters, "run", capture)
+    adapter = adapters.UvBackend(executable, timeout=37)
     adapter.stage(tmp_path / "env", (tmp_path / "tool.whl",))
     assert "--offline" in commands[0] and "--no-python-downloads" in commands[0]
     assert "--no-index" in commands[1] and "--no-deps" in commands[1]
+    assert "--link-mode=copy" in commands[1]
+    assert timeouts == [37, 37, 37]
     assert commands[2][2:4] == ["pip", "check"]
 
 
