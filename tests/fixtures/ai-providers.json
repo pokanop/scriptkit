@@ -1,0 +1,10 @@
+{
+  "openai": {"choices": [{"message": {"content": "PROPOSAL"}}]},
+  "ollama": {"message": {"role": "assistant", "content": "PROPOSAL"}, "done": true},
+  "auth": {"status": 401, "body": "sensitive-key-and-context"},
+  "rate_limit": {"status": 429, "body": "sensitive-key-and-context"},
+  "unavailable": {"status": 503, "body": "sensitive-key-and-context"},
+  "invalid": {"status": 200, "body": "not JSON: sensitive-key-and-context"},
+  "timeout": {"exception": "TimeoutError"},
+  "cancel": {"exception": "KeyboardInterrupt"}
+}
