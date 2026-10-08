@@ -30,21 +30,35 @@ outside the generated `tool.json` unless you deliberately use that canonical cop
 - `__main__.py`: small CLI composition layer; no manager/registry/AI dependencies.
 
 Generated files are `tool.json`, `pyproject.toml`, the entrypoint module,
-`.gitattributes`, and `.scriptkit-generator/.gitignore`. The attributes pin LF for
-generated files and the manifest, including in `core.autocrlf=true` clones. The
-control ignore file excludes locks, journals and staging, but keeps the manifest
-and ignore file versioned. Commit these ownership/VCS files with the project.
-Existing foreign `.gitattributes` files are not overwritten; generate in a new
-project or explicitly reconcile your VCS policy before adopting generation.
+and `.scriptkit-generator/.gitignore`. The control ignore file excludes locks,
+journals and staging, but keeps the manifest and ignore file versioned.
+
+`.gitattributes` is **user owned**: created only when absent, never overwritten.
+You may add LFS rules or other attributes without blocking regeneration. Its
+initial rules are launcher-independent, so entrypoint changes need no edits.
+When a project already has this file, add these lines yourself (the generator
+preserves the existing file verbatim). Keep them effective when customizing
+attributes: generated-file and manifest bytes must remain LF, including in
+`core.autocrlf=true` clones. Commit these VCS files with the project.
+
+```gitattributes
+/.gitattributes text eol=lf
+/.scriptkit-generator/.gitignore text eol=lf
+/.scriptkit-generator/manifest.json text eol=lf
+/tool.json text eol=lf
+/pyproject.toml text eol=lf
+/src/**/*.py text eol=lf
+```
+
 The entrypoint must be `package.module:function` (nested packages supported);
 Python keywords, `_handlers` and `__init__` entrypoint modules are refused, as are
 function names that shadow launcher dependencies (`argparse`, `json`, `_handlers`,
-`vars`, `int`, `str`, `__name__`).
+`vars`, `int`, `str`, `any`, `__name__`).
 The generated argparse launcher invokes one explicit `_handlers.run(command,
 arguments)` function. It does not discover commands by importing modules.
 Argument dictionary keys retain spec spelling, including hyphens.
 
-Initializers and `_handlers.py` are **user owned**: created when absent and never
+Like `.gitattributes`, initializers and `_handlers.py` are **user owned**: created when absent and never
 overwritten or removed. Other existing files are untouched. New generated paths
 cannot silently adopt foreign files, even when bytes match. Generated files removed
 by a new spec are deleted only if their saved hashes still match, or accepted as

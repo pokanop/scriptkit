@@ -214,6 +214,11 @@ def recover(root: Path, *, writer: Writer | None = None) -> bool:
     Refuse recovery when any file matches neither its before nor after bytes.
     No timestamp-based guesses, imports, network or executable journal content.
     """
+    # A clean/never-generated project needs no recovery and must stay untouched.
+    # Re-check after locking: another recovery may finish between these reads.
+    journal_path = control(root) / "journal.json"
+    if not journal_path.exists() and not journal_path.is_symlink():
+        return False
     with locked(root) as directory:
         journal_path = directory / "journal.json"
         if not journal_path.exists() and not journal_path.is_symlink():

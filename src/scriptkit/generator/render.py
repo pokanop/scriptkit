@@ -50,7 +50,7 @@ def render(spec: ToolSpec, *, template_version: str = TEMPLATE_VERSION) -> Rende
     if (
         any(keyword.iskeyword(p) for p in [*parts, function])
         or parts[-1] in {"_handlers", "__init__"}
-        or function in {"argparse", "json", "_handlers", "vars", "int", "str", "__name__"}
+        or function in {"argparse", "json", "_handlers", "vars", "int", "str", "any", "__name__"}
         or len(parts) < 2
     ):
         raise ValueError(
@@ -64,9 +64,6 @@ def render(spec: ToolSpec, *, template_version: str = TEMPLATE_VERSION) -> Rende
     prefix = "src/" + "/".join(parts[:-1])
     mapping = {"spec": repr(spec.canonical_json()), "function": function}
     generated = {
-        ".gitattributes": Template(template["attributes"])
-        .substitute(launcher=f"{prefix}/{parts[-1]}.py")
-        .encode(),
         ".scriptkit-generator/.gitignore": template["ignore"].encode(),
         "tool.json": spec.canonical_json().encode() + b"\n",
         "pyproject.toml": Template(template["project"])
@@ -81,7 +78,10 @@ def render(spec: ToolSpec, *, template_version: str = TEMPLATE_VERSION) -> Rende
         f"{prefix}/{parts[-1]}.py": Template(template["launcher"]).substitute(mapping).encode(),
     }
     # Initializers belong to users too: adding handwritten exports is safe.
-    user = {f"{prefix}/_handlers.py": template["handler"].encode()}
+    user = {
+        ".gitattributes": template["attributes"].encode(),
+        f"{prefix}/_handlers.py": template["handler"].encode(),
+    }
     for i in range(1, len(parts)):
         user["src/" + "/".join(parts[:i]) + "/__init__.py"] = b""
     return Rendered(
@@ -90,4 +90,4 @@ def render(spec: ToolSpec, *, template_version: str = TEMPLATE_VERSION) -> Rende
 
 
 # Updated deliberately with a new template version/migration, never at runtime.
-TEMPLATE_SHA256 = "33188a922e18b180c7668c53cdc79f0ea2e011bec9d92e0c84d41950178a3568"
+TEMPLATE_SHA256 = "6edb4f99439801591fba1abe5fd1b5bb1eba6115a147c5d6729fefd4efa24f5a"

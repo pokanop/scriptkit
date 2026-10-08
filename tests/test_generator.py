@@ -43,7 +43,7 @@ def test_deterministic_offline_backend_contract(tmp_path, spec, monkeypatch):
 
     inventory = {p: sha256(b) for p, b in (first.generated | first.user).items()}
     assert sha256(canonical(inventory)) == (
-        "aee0990447a1484c278f0af462a165f8790092143986bec13ce0e6ccbaf97b9e"
+        "d60734d4c0994721522100f47e5f8e40f341deac81366ce5d8fd58cc05945dde"
     )
     project = tomllib.loads(first.generated["pyproject.toml"].decode())
     assert project["project"]["scripts"][spec.name] == spec.entrypoint

@@ -87,7 +87,7 @@ def test_autocrlf_clone_is_clean_and_ignores_transient_control(tmp_path):
     git("config", "core.autocrlf", "true", cwd=clone)
     assert not preview(clone, output).drift
     apply(clone, preview(clone, output))
-    assert recover(clone) is False  # creates a native lock, still untracked
+    assert recover(clone) is False  # no journal, so no lock or other mutation
     assert not git("status", "--porcelain", cwd=clone)
 
 
@@ -149,11 +149,38 @@ def test_all_recovery_conflicts_explained_and_reconciled(tmp_path, capsys):
 
 
 @pytest.mark.parametrize(
-    "function", ["argparse", "_handlers", "vars", "json", "int", "str", "__name__"]
+    "function", ["argparse", "_handlers", "vars", "json", "int", "str", "any", "__name__"]
 )
 def test_reserved_function_names_rejected(function):
     with pytest.raises(ValueError, match="reserved"):
         render(dataclasses.replace(spec(), entrypoint=f"demo.cli:{function}"))
+
+
+@pytest.mark.parametrize("preexisting", [False, True])
+def test_user_attributes_survive_updates_and_entrypoint_changes(tmp_path, preexisting):
+    attributes = tmp_path / ".gitattributes"
+    custom = b"*.bin filter=lfs diff=lfs merge=lfs -text\n"
+    if preexisting:
+        attributes.write_bytes(custom)
+    output = render(spec())
+    apply(tmp_path, preview(tmp_path, output))
+    if not preexisting:
+        attributes.write_bytes(attributes.read_bytes() + custom)
+        assert b"/src/**/*.py text eol=lf" in attributes.read_bytes()
+    original = attributes.read_bytes()
+    assert not preview(tmp_path, output).drift
+    changed = render(dataclasses.replace(spec(), entrypoint="demo.nested.other:main"))
+    apply(tmp_path, preview(tmp_path, changed))
+    assert attributes.read_bytes() == original
+    assert not preview(tmp_path, changed).drift
+    assert ".gitattributes" in json.loads((tmp_path / MANIFEST).read_text())["user"]
+
+
+def test_recover_never_generated_directory_is_read_only(tmp_path, capsys):
+    assert recover(tmp_path) is False
+    assert main(["unused.json", str(tmp_path), "--recover"]) == 0
+    assert json.loads(capsys.readouterr().out) == {"recovered": False}
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_recover_rechecks_journal_after_lock(tmp_path, monkeypatch):
