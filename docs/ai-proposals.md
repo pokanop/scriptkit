@@ -2,7 +2,7 @@
 
 AI is optional. `scriptkit.generator` does not import AI code; manual/offline generation remains byte-identical without a provider. Inference is **nondeterministic**. Reproducibility begins at saved, approved inputs, not at a prompt or model name.
 
-This release provides a typed provider port, offline `FakeProvider` contract harness and file-based review CLI. It does not bundle a hosted provider, send context automatically, install dependencies or run proposed code/tests. There is deliberately **no execution option**, including no host-based opt-in runner. Use an independently reviewed disposable sandbox (no credentials, network disabled) if you later choose to execute untrusted code; a venv or temporary directory alone is not a sandbox.
+This release provides a typed provider port, offline `FakeProvider` contract harness, optional OpenAI/Ollama HTTP adapters and a file-based review CLI. It never sends context automatically, installs dependencies or runs proposed code/tests. There is deliberately **no execution option**, including no host-based opt-in runner. Use an independently reviewed disposable sandbox (no credentials, network disabled) if you later choose to execute untrusted code; a venv or temporary directory alone is not a sandbox.
 
 ## Select, preview, propose, review, apply
 
@@ -50,6 +50,77 @@ Review is read-only against the project. It builds a data-only scratch snapshot 
 Apply recomputes review, checks approval against the envelope/diffs and checked base bytes, then uses the generator's locked, journaled transaction. Any malformed, oversized, forbidden, stale or statically invalid proposal fails before project writes. Context permits 32 files, 64 KiB per file and 512 KiB serialized total; responses permit 32 patches and 256 KiB serialized total. Static snapshots are limited to 256 source/base files and 2 MiB. Filesystem concurrency assumes a trusted project directory, not hostile concurrent writers.
 
 If interrupted during publication, do not execute the project until `python -m scriptkit.generator PROJECT/tool.json PROJECT --recover` completes (the existing generator recovery command). Multi-file atomic visibility is not claimed. The persisted journal permits deterministic roll-forward and refuses intervening edits. Keep original `context.json`, `proposal.json`, the reviewed hash and the original project revision outside the project: replay on the same base produces identical approved files. Afterwards, normal regeneration from saved `tool.json` preserves the user-owned handler/tests/examples.
+
+## Guided BYOK authoring (optional)
+
+A complete offline-first flow (shell redirections work in PowerShell too):
+
+```sh
+# Prepare a ToolSpec offline; the example must use the generated package convention.
+python -c "from scriptkit.contracts import ToolSpec, resource_text; from dataclasses import replace; print(replace(ToolSpec.from_json(resource_text('ToolSpec.example.json')), entrypoint='demo.cli:main').canonical_json())" > demo-spec.json
+mkdir demo
+scriptkit new-tool demo --spec demo-spec.json --apply
+scriptkit validate demo
+python -m scriptkit.ai context demo src/demo/_handlers.py > context.json
+# Preview only: no key lookup or request. Choose a model already installed in Ollama.
+python -m scriptkit.ai propose demo src/demo/_handlers.py --provider ollama --model YOUR_LOCAL_MODEL --goal 'Implement the hello handler' > disclosure.json
+# Inspect the full disclosure (including selected context), copy its approval_hash,
+# then repeat EXACTLY the same arguments and add approval:
+python -m scriptkit.ai propose demo src/demo/_handlers.py --provider ollama --model YOUR_LOCAL_MODEL --goal 'Implement the hello handler' --approve-disclosure EXACT_DISCLOSURE_HASH > proposal.json
+python -m scriptkit.ai review demo context.json proposal.json > review.json
+# Inspect every diff, copy review approval_hash; neither operation runs proposed code.
+python -m scriptkit.ai apply demo context.json proposal.json --approve EXACT_REVIEW_HASH
+scriptkit validate demo
+```
+
+Keep review/context/proposal files outside the scaffold. If a proposal fails static
+checks, edit manually or explicitly request another proposal; there is no repair
+loop, fallback provider, dependency installation, publishing or commit operation.
+Offline/manual scaffold generation is unchanged if AI is never imported.
+
+For OpenAI, replace `--provider ollama --model ...` with `--provider openai --model
+YOUR_OPENAI_MODEL` in BOTH preview and approved commands. Select a chat-completions
+model supporting JSON mode and `max_completion_tokens`. Provide `OPENAI_API_KEY`
+through your shell's secret injection facilities, never a command argument or
+project file. Alternatively install the optional `pokanop-scriptkit[ai-keyring]`
+extra yourself and store a password in your OS keyring under service `scriptkit.ai`,
+username `openai`; pass `--keyring` to opt into lookup. Environment takes precedence.
+No package is installed automatically. Missing keys/keyring backends fail with
+manual-edit guidance, without project changes. There are no provider SDK requirements:
+both adapters use Python's standard-library HTTP client, imported only by AI.
+
+OpenAI's destination is fixed to `https://api.openai.com/v1/chat/completions`.
+Ollama defaults to `http://127.0.0.1:11434/api/chat`; `--endpoint` accepts only literal
+IPv4/IPv6 loopback HTTP URLs with an explicit port and `/api/chat` path (no userinfo,
+query or fragment). Local endpoints never load or receive cloud credentials.
+Proxies, redirects, cookies and automatic authentication discovery are disabled.
+The endpoint process itself is trusted; ScriptKit cannot stop it forwarding data.
+No automatic model downloads are requested. Context selection never crawls the
+repository/home directory and excludes `.env`, configuration and arbitrary files.
+A conservative common-secret check is defense in depth, NOT a reliable scanner:
+inspect every selected byte, including ToolSpec descriptions, before approval.
+
+`--max-requests` defaults to 1 (hard ceiling 4), `--retries` to 0 (ceiling 3).
+Only HTTP 429/503 are retryable and each retry consumes BOTH budgets; there is no
+unbounded backoff or paid fallback. `--max-tokens` defaults to 32768 (ceiling 262144)
+and reserves serialized request UTF-8 bytes + 1024 framing allowance + the entire
+output allowance on each attempt, even failures. This intentionally conservative
+estimate is not a price guarantee or account-wide quota. `--max-output-tokens`
+defaults to 4096 (ceiling 16384), is sent to the provider AND conservatively enforced
+as a response-content byte cap without trusting provider usage reports. Large
+contexts/proposals may therefore require a deliberate budget increase or smaller
+selection. Limits apply per CLI invocation/provider instance, not across invocations.
+`--timeout` is the socket inactivity timeout (default 30 seconds, ceiling 120), not
+a wall-clock inference deadline. Ctrl-C closes the connection, exits 130 and writes
+no proposal/project files; cancellation cannot reverse a charge already incurred.
+
+Preview hashes bind context, goal, model, destination and all limits. Stdout contains
+only versioned JSON (preview/proposal/review); diagnostics go to stderr, no animation.
+Provider error bodies, transport exception text and credentials are never logged.
+A provider echo of the loaded key is rejected, not persisted. Proposal text still
+requires human inspection for other sensitive content. Shell redirection may create
+an empty output file on failure, but ScriptKit never modifies the scaffold until
+explicit `apply`. Routine CI uses synthetic wire fixtures, not live keys or models.
 
 ## Trust limits
 
