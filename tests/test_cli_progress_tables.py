@@ -130,13 +130,31 @@ def test_parallel_map_empty(no_color):
     assert progress.parallel_map(lambda x: x, []) == []
 
 
-def test_parallel_map_preserves_completion_order(no_color):
-    import time
+def test_parallel_map_preserves_completion_order(no_color, monkeypatch):
+    import threading
 
-    order = progress.parallel_map(
-        lambda d: (time.sleep(d / 100.0) or d), [5, 1, 3, 2], max_workers=4
-    )
-    assert order[0] == 1 and order[-1] == 5
+    expected = [1, 2, 3, 5]
+    ready = {item: threading.Event() for item in expected}
+    ready[1].set()
+
+    class CompletionQueue(progress.queue.Queue):
+        def put(self, item, block=True, timeout=None):
+            super().put(item, block=block, timeout=timeout)
+            # Release the next worker only after this result is enqueued.
+            # Relative sleeps cannot guarantee completion order on busy CI.
+            if isinstance(item, tuple) and item[0] is True:
+                index = expected.index(item[1])
+                if index + 1 < len(expected):
+                    ready[expected[index + 1]].set()
+
+    monkeypatch.setattr(progress.queue, "Queue", CompletionQueue)
+
+    def worker(item):
+        assert ready[item].wait(timeout=5), "completion chain stalled"
+        return item
+
+    order = progress.parallel_map(worker, [5, 1, 3, 2], max_workers=4)
+    assert order == expected
 
 
 def test_parallel_map_worker_exception_propagates(no_color):
