@@ -36,6 +36,10 @@ There are **no mandatory runtime dependencies**, including no `requests`.
 Install `.[rich]` from a checkout for optional Rich 13 rendering; without it,
 plain-text output, progress, tables and diagnostics still work.
 
+For opt-in automation-safe JSON, themes, shared progress and prompts, see
+[output contracts](docs/output.md) and [customization example](examples/output.py).
+Legacy helpers keep their existing behavior.
+
 See [runtime API](docs/runtime.md), [versioned contracts](docs/contracts.md),
 [component ownership](docs/architecture.md),
 [compatibility policy](docs/compatibility.md), [contributing](CONTRIBUTING.md)
