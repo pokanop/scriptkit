@@ -57,22 +57,41 @@ def dispatch(args: argparse.Namespace, context: OutputContext) -> object:
     if args.command == "doctor":
         import importlib.util
 
-        return {
+        state = read(root / "manager-active.json")
+        health = {
             "python": platform.python_version(),
             "venv": importlib.util.find_spec("venv") is not None,
             "root": str(root),
-            "manager": read(root / "manager-active.json"),
+            "manager": state,
             "bin": str(root / "bin"),
             "on_path": str(root / "bin") in os.environ.get("PATH", "").split(os.pathsep),
             "guidance": "Install Python 3.11+ with venv/ensurepip. Add the bin directory to PATH explicitly; rerun the pinned bootstrap to repair.",
         }
+        if context.policy.machine:
+            return health
+        return "\n".join(
+            (
+                f"Python: {health['python']}",
+                f"venv available: {'yes' if health['venv'] else 'no'}",
+                f"Root: {root}",
+                f"Manager generation: {state.get('target') or 'not installed'}",
+                f"Previous generation: {state.get('previous') or 'none'}",
+                f"Commands: {health['bin']}",
+                f"Commands on PATH: {'yes' if health['on_path'] else 'no'}",
+                str(health["guidance"]),
+            )
+        )
     if args.command in ("self-update", "self-rollback"):
         manager = Manager(root, checkpoint=lambda phase: context.emit("info", phase))
-        return (
+        result = (
             manager.rollback()
             if args.command == "self-rollback"
             else manager.install(args.wheel, args.sha256, args.version)
         )
+        if context.policy.machine:
+            return result
+        verb = "Rolled back" if args.command == "self-rollback" else "Updated"
+        return f"{verb} manager to {result['version']}."
     store = RegistryStore(root / "registries.json")
     resolver = Resolver(store, VerifiedCache(root / "cache"))
     if args.command == "registry":
@@ -83,9 +102,20 @@ def dispatch(args: argparse.Namespace, context: OutputContext) -> object:
             )
         elif args.action == "remove":
             store.remove(args.namespace)
-        return [entry.to_dict() for entry in store.list()]
+        entries = store.list()
+        if context.policy.machine:
+            return [entry.to_dict() for entry in entries]
+        return (
+            "\n".join(f"{entry.namespace}: {entry.origin}" for entry in entries)
+            or "No registries registered."
+        )
     if args.command == "catalog":
-        return resolver.list(args.namespace, offline=args.offline)
+        releases = resolver.list(args.namespace, offline=args.offline)
+        return (
+            releases
+            if context.policy.machine
+            else "\n".join(releases) or "No tools in this catalog."
+        )
     namespace = args.target.split("/")[0] if args.command in ("install", "update") else "unused"
     installer = Installer(
         root / "tools",
@@ -118,6 +148,17 @@ def dispatch(args: argparse.Namespace, context: OutputContext) -> object:
         )
         with context.progress("Installing tool"):
             receipt = installer.install(resolved, dry_run=args.dry_run)
-        return {"plan": resolved.to_dict(), "receipt": str(receipt) if receipt else None}
+        if context.policy.machine:
+            return {"plan": resolved.to_dict(), "receipt": str(receipt) if receipt else None}
+        if args.dry_run:
+            return f"Dry run: would {args.command} {args.target}; no changes made."
+        verb = "Installed" if args.command == "install" else "Updated"
+        return f"{verb} {args.target}."
     getattr(installer, args.command)(args.name)
-    return {"tool": args.name, "action": args.command}
+    if context.policy.machine:
+        return {"tool": args.name, "action": args.command}
+    return {
+        "rollback": f"Rolled back {args.name} to the previous generation.",
+        "recover": f"Recovery complete for {args.name}.",
+        "uninstall": f"Uninstalled {args.name}; user data and config preserved.",
+    }[args.command]

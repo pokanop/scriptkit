@@ -171,15 +171,26 @@ def launcher_files(root: Path) -> dict[Path, bytes]:
     source = (
         "import json, os, pathlib, re, subprocess, sys\n"
         f"root = pathlib.Path({str(root)!r})\n"
-        "state = json.loads((root / 'manager-active.json').read_text(encoding='utf-8'))\n"
-        "target = state['target']\n"
-        "if not re.fullmatch('[a-f0-9]{32}', target): sys.exit('invalid manager pointer')\n"
+        "def fail(message):\n"
+        "    message += '; rerun the pinned bootstrap with --root ' + str(root) + ' (or use its --rollback option)'\n"
+        "    print('error: ' + message, file=sys.stderr)\n"
+        "    if '--json' in sys.argv[1:]:\n"
+        "        print(json.dumps({'schema_version': 1, 'ok': False, 'data': None, 'error': message}))\n"
+        "    sys.exit(1)\n"
+        "try:\n"
+        "    state = json.loads((root / 'manager-active.json').read_text(encoding='utf-8'))\n"
+        "except (OSError, ValueError): fail('cannot read manager pointer')\n"
+        "target = state.get('target') if isinstance(state, dict) else None\n"
+        "if not isinstance(target, str) or not re.fullmatch('[a-f0-9]{32}', target): fail('invalid manager pointer')\n"
         "base = root / 'manager-generations' / target\n"
         f"python = base / {('Scripts/python.exe' if os.name == 'nt' else 'bin/python')!r}\n"
         "argv = [str(python), '-I', '-X', 'utf8', '-m', 'scriptkit', *sys.argv[1:]]\n"
         "os.environ['SCRIPTKIT_ROOT'] = str(root)\n"
-        "if os.name != 'nt': os.execv(str(python), argv)\n"
-        "sys.exit(subprocess.call(argv))\n"
+        "try:\n"
+        "    if not python.is_file(): fail('manager generation ' + target + ' is missing or incomplete')\n"
+        "    if os.name != 'nt': os.execv(str(python), argv)\n"
+        "    sys.exit(subprocess.call(argv))\n"
+        "except OSError: fail('manager generation ' + target + ' cannot start')\n"
     ).encode()
     if os.name == "nt":
         wrapper = cmd_launcher(python, loader, utf8=True)
@@ -227,7 +238,14 @@ class Manager:
             artifact = env / f"pokanop_scriptkit-{version}-py3-none-any.whl"
             artifact.write_bytes(raw)
             with zipfile.ZipFile(artifact) as archive:
-                metadata = archive.read(f"pokanop_scriptkit-{version}.dist-info/METADATA").decode()
+                try:
+                    metadata = archive.read(
+                        f"pokanop_scriptkit-{version}.dist-info/METADATA"
+                    ).decode()
+                except KeyError as exc:
+                    raise ValueError(
+                        f"manager wheel identity/version does not match requested {version}"
+                    ) from exc
                 headers = Parser().parsestr(metadata)
                 if headers.get_all("Version") != [version] or headers.get_all("Name") != [
                     "pokanop-scriptkit"

@@ -83,6 +83,9 @@ no-PATH operation. The stable launcher supplies its root to the CLI. When using
 an unrelated Python's `python -m scriptkit`, use `--root` or `SCRIPTKIT_ROOT`.
 Global flags precede subcommands. `--json` always emits a v1 output envelope on
 stdout; phase messages/child output use stderr, without redirected animation.
+Without `--json`, doctor prints readable key/value checks, registries and catalog
+entries appear one per line, and lifecycle commands print short summaries rather
+than internal plans or receipts.
 
 Optional `--path-file <new-file>` creates an explicitly requested environment
 file (`export PATH=...` on Unix, `$env:PATH=...` on Windows). Source/dot-source
@@ -125,6 +128,11 @@ python3 -I bootstrap.py --root "$ROOT" --rollback
 # If no previous healthy generation exists, rerun the pinned install command.
 ```
 
+If the selected generation or interpreter is missing, the stable launcher exits 1
+with a single recovery message rather than a traceback. With `--json` it also
+emits the standard v1 failure envelope, without importing the broken runtime.
+Missing/corrupt pointers and interpreter launch errors provide the same guidance.
+
 Each attempt allocates a fresh manager generation, verifies wheel bytes and
 package/version identity, creates a new venv, installs offline with `--no-deps`,
 and smokes help/version plus the manager doctor command (rejecting runtime-only
@@ -148,7 +156,8 @@ with the new Python: receipt-owned manager launchers are atomically refreshed.
 For a pre-ledger installation (or edited launcher), the error identifies the
 file to inspect and move aside only if it is your obsolete ScriptKit launcher;
 bootstrap will not guess ownership. Existing tool launchers may still require
-tool reinstallation after a base-Python move. Local root/state and PATH
+`uninstall <tool>` followed by `install namespace/tool@version` after a base-Python
+move: a plain reinstall preserves the old launcher. Local root/state and PATH
 integration parents must be private/trusted.
 OS file replacement handles process interruption, not a guarantee against every
 filesystem/power-loss scenario. Locked Windows pointer files fail closed rather

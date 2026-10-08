@@ -290,6 +290,18 @@ def test_real_manager_install_repair_and_tool(tmp_path, built_wheel):
     env = root / "manager-generations" / first["generation"]
     python = b.python_at(env)
     python.unlink()
+    for flags in ([], ["--json"]):
+        broken = subprocess.run(
+            [str(command), *flags, "doctor"], capture_output=True, text=True, encoding="utf-8"
+        )
+        assert broken.returncode == 1
+        assert "Traceback" not in broken.stderr
+        assert "rerun the pinned bootstrap" in broken.stderr
+        assert first["generation"] in broken.stderr
+        if flags:
+            assert json.loads(broken.stdout)["ok"] is False
+        else:
+            assert broken.stdout == ""
     assert subprocess.check_output([str(tool)], text=True).strip() == "working"
     service.install("https://example.org/pinned.whl", hashlib.sha256(raw).hexdigest(), "1.3.0")
     assert json.loads(cli("doctor").stdout)["ok"]
