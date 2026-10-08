@@ -111,7 +111,7 @@ def destination(provider: str, endpoint: str | None) -> str:
 
 SECRET = re.compile(
     r"-----BEGIN .*PRIVATE KEY|\bsk-[A-Za-z0-9_-]{16,}|"
-    r"\b(?i:api[_-]?key|password|secret|access[_-]?token)\w*\s*[=:]\s*"
+    r"(?<![A-Za-z0-9])(?i:api[_-]?key|password|secret|access[_-]?token)\w*[\"']?\s*[=:]\s*"
     r"[\"'][^\"'\s]{8,}[\"']"
 )
 

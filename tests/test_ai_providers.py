@@ -279,8 +279,23 @@ def test_nonsecret_credential_authoring_allowed(project, text):
         "api_key = 'synthetic-secret'",
         "-----BEGIN RSA PRIVATE KEY-----",
         "sk-abcdefghijklmnopqrstuv",
+        'DB_PASSWORD = "correcthorsebattery"',
+        'client_secret = "abcd1234efgh5678"',
+        'GITHUB_ACCESS_TOKEN = "ghp_syntheticfixture"',
+        '{"api_key": "synthetic-secret"}',
+        "{'client_secret': 'synthetic-secret'}",
     ],
-    ids=["password", "api-key", "pem", "key-prefix"],
+    ids=[
+        "password",
+        "api-key",
+        "pem",
+        "key-prefix",
+        "prefixed-password",
+        "prefixed-secret",
+        "prefixed-token",
+        "dict-key",
+        "prefixed-dict-key",
+    ],
 )
 def test_raw_file_and_goal_secrets_refused(project, text):
     context = select(project, ())
