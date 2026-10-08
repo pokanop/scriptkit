@@ -16,6 +16,22 @@ from .cli import CliError
 from .proc import Result
 
 
+def _kill_group(process: subprocess.Popen[bytes]) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        # Darwin reports EPERM for a group containing only an unreaped zombie.
+        # Reap the leader, then retry; never suppress a live-group denial.
+        if process.poll() is None:
+            raise
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
 class ProcessRunner(Protocol):
     def run(self, cmd: Sequence[str], *, timeout: float = 300) -> Result: ...
 
@@ -121,14 +137,13 @@ class BoundedRunner:
                 if job is not None:
                     job.close()
                 if process is not None:
-                    if os.name != "nt":
-                        try:
-                            os.killpg(process.pid, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass
-                    if process.poll() is None:
-                        process.kill()
-                    process.wait()
+                    try:
+                        if os.name != "nt":
+                            _kill_group(process)
+                    finally:
+                        if process.poll() is None:
+                            process.kill()
+                        process.wait()
         if check and not result.ok:
             # Unlike legacy check, do not echo potentially secret args or output.
             raise CliError(f"command failed (exit {result.code})")
