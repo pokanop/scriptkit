@@ -83,7 +83,7 @@
             "path": {
               "description": "expected case-preserving relative POSIX path; no traversal, devices or trailing dots",
               "maxLength": 240,
-              "pattern": "^(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_-])?(?:/(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_-])?)*$(?![\\s\\S])",
+              "pattern": "^(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.+@-]*[A-Za-z0-9_+@-])?(?:/(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.+@-]*[A-Za-z0-9_+@-])?)*$(?![\\s\\S])",
               "type": "string"
             },
             "sha256": {
@@ -127,7 +127,7 @@
                         "path": {
                           "description": "expected case-preserving relative POSIX path; no traversal, devices or trailing dots",
                           "maxLength": 240,
-                          "pattern": "^(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_-])?(?:/(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_-])?)*$(?![\\s\\S])",
+                          "pattern": "^(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.+@-]*[A-Za-z0-9_+@-])?(?:/(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.+@-]*[A-Za-z0-9_+@-])?)*$(?![\\s\\S])",
                           "type": "string"
                         },
                         "sha256": {

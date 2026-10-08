@@ -30,7 +30,10 @@ valid contract data.
 Names are portable lowercase identifiers, limited to 64 characters. Installation
 destinations are lowercase relative POSIX paths; artifact and inventory paths
 preserve ASCII case (for example `PIL/Image.py`, `Scripts/python.exe`, `LICENSE`
-and `.dist-info/METADATA` under a package prefix). Paths are limited to 240
+and `.dist-info/METADATA` under a package prefix). Artifact/inventory components
+also allow `+` and `@` after the first character, supporting local-version wheels
+such as `torch-2.1.0+cpu.whl` and versioned formula paths. `~` is excluded to reject
+Windows 8.3 short-name aliases such as `LONGNA~1`. Paths are limited to 240
 characters: no absolute
 paths, drive letters, separators other than `/`, empty/dot/traversal components,
 Windows device names in any case, trailing dots/spaces or control characters.
@@ -45,7 +48,11 @@ translation from host spellings (`AMD64`, `aarch64`, `darwin`).
 Tool/catalog versions use SemVer 2.0. Package identifiers are normalized lowercase
 identifiers starting with an alphanumeric and containing alphanumerics, `.`, `_`,
 `-`, `+` or `@` (including qualified winget IDs, apt `g++`/`libstdc++6` and brew
-`python@3.12`/`openssl@3`); they are not filesystem paths. Package versions are exact numeric-leading
+`python@3.12`/`openssl@3`); they are not filesystem paths. A **pip** lock further
+requires PEP 503 normalized names: lowercase alphanumeric components separated
+by single hyphens. Dots, underscores, repeated hyphens, `+` and `@` must not appear
+in pip lock names; a URL-like `foo@bar` is not a package pin. This backend-specific
+cross-field rule is enforced by the strict parser. Package versions are exact numeric-leading
 backend versions (not Python-only SemVer, moving tags or solver expressions).
 Adapters must additionally validate their backend's version grammar and verify
 that fetched metadata matches the exact lock. SHA-256 values are

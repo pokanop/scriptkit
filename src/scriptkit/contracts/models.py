@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from collections.abc import Hashable, Sequence
 from typing import Any, TypeVar, dataclass_transform
@@ -20,7 +21,7 @@ COMPONENT = (
     r"(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|/|$))[a-z0-9_](?:[a-z0-9_.-]*[a-z0-9_-])?"
 )
 PATH = "^" + COMPONENT + "(?:/" + COMPONENT + ")*" + END
-INVENTORY_COMPONENT = r"(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_-])?"
+INVENTORY_COMPONENT = r"(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.+@-]*[A-Za-z0-9_+@-])?"
 INVENTORY_PATH = "^" + INVENTORY_COMPONENT + "(?:/" + INVENTORY_COMPONENT + ")*" + END
 SEMVER = (
     r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
@@ -217,6 +218,13 @@ class DependencyLock(Record):
         }
         if self.platform.os not in supported[self.backend]:
             raise ContractError("backend: incompatible with platform.os")
+        if self.backend == "pip":
+            for package in self.packages:
+                if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", package.name) is None:
+                    raise ContractError(
+                        "packages.name: pip requires PEP 503 normalized names "
+                        "(lowercase alphanumeric components separated by single hyphens)"
+                    )
         unique([package.name for package in self.packages], "packages.name")
         unique([package.artifact.path for package in self.packages], "packages.artifact.path")
 

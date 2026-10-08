@@ -13,6 +13,7 @@ from scriptkit.contracts import (
     CatalogRelease,
     CommandSpec,
     ContractError,
+    DependencyLock,
     Generation,
     LockedPackage,
     Platform,
@@ -27,12 +28,54 @@ def example(cls):
     return cls.from_json(resource_text(f"{cls.__name__}.example.json"))
 
 
+@pytest.mark.parametrize(
+    "path", ["+pkg/file", "@pkg/file", "pkg/+file", "pkg/@file", "LONGNA~1", "pkg/LONGNA~1.txt"]
+)
+def test_inventory_rejects_prefix_symbols_and_short_name_aliases(path):
+    with pytest.raises(ContractError):
+        Artifact(path, "a" * 64, 1)
+    assert not Draft202012Validator(Artifact.json_schema()).is_valid(
+        dict(path=path, sha256="a" * 64, size=1)
+    )
+
+
+@pytest.mark.parametrize(
+    "name", ["foo@bar", "g++", "foo_bar", "foo.bar", "foo--bar", "-foo", "foo-"]
+)
+def test_pip_requires_normalized_names(name):
+    data = example(DependencyLock).to_dict()
+    data["packages"] = [
+        dict(
+            name=name,
+            version="2.1.0+cpu",
+            artifact=dict(path="torch-2.1.0+cpu.whl", sha256="a" * 64, size=1),
+        )
+    ]
+    with pytest.raises(ContractError, match="packages.*name"):
+        DependencyLock.from_dict(data)
+
+
+def test_backend_specific_names_remain_usable():
+    lock = example(DependencyLock)
+    for backend, platform, name in [
+        ("pip", Platform("linux", "x86_64"), "my-package"),
+        ("apt", Platform("linux", "x86_64"), "g++"),
+        ("brew", Platform("macos", "arm64"), "python@3.12"),
+    ]:
+        package = LockedPackage(name, "2.1.0+cpu", Artifact("torch-2.1.0+cpu.whl", "a" * 64, 1))
+        value = replace(lock, backend=backend, platform=platform, packages=(package,))
+        assert DependencyLock.from_json(value.canonical_json()) == value
+
+
 def test_real_inventory_roundtrip():
     paths = (
         "sample.dist-info/METADATA",
         "Scripts/python.exe",
         "Lib/site-packages/PIL/Image.py",
         "LICENSE",
+        "torch-2.1.0+cpu.dist-info/METADATA",
+        "torch-2.1.0+cpu-cp311-cp311-linux_x86_64.whl",
+        "python@3.12/bin/python",
     )
     receipt = replace(example(Receipt), files=tuple(Artifact(p, "a" * 64, 1) for p in paths))
     assert Receipt.from_json(receipt.canonical_json()) == receipt
