@@ -9,7 +9,7 @@ import sys
 import scriptkit
 
 
-LAYERS = {"contracts", "registry", "manager", "generator", "ai"}
+LAYERS = {"contracts", "registry", "manager", "generator", "ai", "conformance"}
 ALLOWED = {
     "runtime": {"runtime"},
     "contracts": {"contracts"},
@@ -17,6 +17,7 @@ ALLOWED = {
     "manager": {"manager", "contracts", "state", "execution"},
     "generator": {"generator", "contracts"},
     "ai": {"ai", "contracts"},
+    "conformance": {"conformance", "contracts", "generator", "output", "command", "execution"},
 }
 
 
@@ -70,8 +71,8 @@ def violations(text, module, is_package=False):
         if target.startswith("scriptkit.") or target == "scriptkit":
             # Narrow reusable IO adapters, never the whole runtime or provider layer.
             target_layer = layer(target)
-            for adapter in ("state", "execution"):
-                if source in {"registry", "manager"} and (
+            for adapter in ("state", "execution", "output", "command"):
+                if source in {"registry", "manager", "conformance"} and (
                     target == f"scriptkit.{adapter}" or target.startswith(f"scriptkit.{adapter}.")
                 ):
                     target_layer = adapter
@@ -110,6 +111,9 @@ def test_checker_detects_regressions():
         ("from .. import manager", "scriptkit.contracts.models"),
         ("import requests", "scriptkit.contracts.models"),
         ("import scriptkit.console", "scriptkit.registry.cache"),
+        ("import scriptkit.manager", "scriptkit.conformance.static"),
+        ("import scriptkit.conformance", "scriptkit.app"),
+        ("import scriptkit.ai", "scriptkit.conformance.static"),
         ("import scriptkit.state", "scriptkit.contracts.models"),
         ("import scriptkit.registry", "scriptkit.manager.service"),
         ("import scriptkit.console", "scriptkit.manager.service"),
@@ -133,7 +137,7 @@ def test_core_imports_without_upper_layers():
 import sys
 class BlockUpperLayers:
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split('.')[0] in {'requests', 'openai', 'anthropic', 'pydantic', 'jsonschema'} or any(fullname == 'scriptkit.' + name or fullname.startswith('scriptkit.' + name + '.') for name in ('manager', 'registry', 'generator', 'ai')):
+        if fullname.split('.')[0] in {'requests', 'openai', 'anthropic', 'pydantic', 'jsonschema'} or any(fullname == 'scriptkit.' + name or fullname.startswith('scriptkit.' + name + '.') for name in ('manager', 'registry', 'generator', 'ai', 'conformance')):
             raise AssertionError('Forbidden core dependency: ' + fullname)
 sys.meta_path.insert(0, BlockUpperLayers())
 import scriptkit

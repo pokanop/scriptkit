@@ -12,6 +12,7 @@ Authoritative framework repository: https://github.com/pokanop/scriptkit.
 | Manager: `scriptkit.manager` (POK-621) | Per-tool transactions, stable launchers and rollback; inject `InstallationSource` / `EnvironmentBackend`. See [installation](installation.md). CLI orchestration remains POK-622. |
 | Registry: `scriptkit.registry` (POK-620) | Resolution, verification/cache and `RegistryArtifactSource` port adapter; no CLI or AI dependency. |
 | Generator: future `scriptkit.generator` (POK-623/624) | Deterministic spec-to-files logic, independent from manager and AI. |
+| Conformance: `scriptkit.conformance` (POK-625) | Static data/AST checks reuse contracts and generator ownership readers; opt-in reference fixtures use narrow output/command/execution adapters. Never imports manager, registry or AI. Installed rules/examples are provider-independent. |
 | AI: future `scriptkit.ai` (POK-626/627) | Optional proposal/provider adapters; calls generator contracts, never imported by runtime. |
 
 Runtime, CLI composition boundary and contracts exist today; concrete upper-layer
@@ -30,7 +31,11 @@ entrypoint / __main__ (composition root)
     └── AI ─────────┘
 ```
 
-Upper layers may import themselves and contracts, not one another. Cross-layer
+Conformance is an authoring-side consumer of generator ownership readers and contracts;
+it never runs project imports. Its CLI/reference recipe may use only the narrow
+output, command and execution runtime adapters. Runtime must never import conformance.
+
+Other upper layers may import themselves and contracts, not one another. Cross-layer
 calls use injected ports; composition roots wire concrete implementations.
 The explicit exception is `registry → scriptkit.state`: registry stores/cache reuse
 `LocalStateIO` as a default atomic persistence adapter and accept injected `StateIO`

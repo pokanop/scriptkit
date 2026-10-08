@@ -45,6 +45,10 @@ For opt-in automation-safe JSON, themes, shared progress and prompts, see
 [output contracts](docs/output.md) and [customization example](examples/output.py).
 Legacy helpers keep their existing behavior.
 
+Validate authored tools with `scriptkit validate PROJECT`; see
+[conformance checks and installed assistant guidance](docs/conformance.md).
+Static checks never execute project code or certify it safe.
+
 See [runtime API](docs/runtime.md), [versioned contracts](docs/contracts.md),
 [component ownership](docs/architecture.md),
 [compatibility policy](docs/compatibility.md), [contributing](CONTRIBUTING.md)
