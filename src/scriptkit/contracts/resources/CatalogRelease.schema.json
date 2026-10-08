@@ -1,0 +1,406 @@
+{
+  "$id": "urn:scriptkit:contracts:CatalogRelease:1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "description": "expected portable lowercase identifier (not a Windows device name)",
+      "maxLength": 64,
+      "pattern": "^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\\.|$))[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$(?![\\s\\S])",
+      "type": "string"
+    },
+    "releases": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "description": "expected case-preserving relative POSIX path; no traversal, devices or trailing dots",
+                "maxLength": 240,
+                "pattern": "^(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.+@-]*[A-Za-z0-9_+@-])?(?:/(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.+@-]*[A-Za-z0-9_+@-])?)*$(?![\\s\\S])",
+                "type": "string"
+              },
+              "sha256": {
+                "description": "expected lowercase SHA-256, 64 hex characters",
+                "pattern": "^[0-9a-f]{64}$(?![\\s\\S])",
+                "type": "string"
+              },
+              "size": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "path",
+              "sha256",
+              "size"
+            ],
+            "type": "object"
+          },
+          "locks": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "backend": {
+                  "enum": [
+                    "pip",
+                    "apt",
+                    "brew",
+                    "winget"
+                  ],
+                  "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
+                  "type": "string"
+                },
+                "packages": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "artifact": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "path": {
+                            "description": "expected case-preserving relative POSIX path; no traversal, devices or trailing dots",
+                            "maxLength": 240,
+                            "pattern": "^(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.+@-]*[A-Za-z0-9_+@-])?(?:/(?!(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][0-9]|[lL][pP][tT][0-9])(?:\\.|/|$))[A-Za-z0-9_](?:[A-Za-z0-9_.+@-]*[A-Za-z0-9_+@-])?)*$(?![\\s\\S])",
+                            "type": "string"
+                          },
+                          "sha256": {
+                            "description": "expected lowercase SHA-256, 64 hex characters",
+                            "pattern": "^[0-9a-f]{64}$(?![\\s\\S])",
+                            "type": "string"
+                          },
+                          "size": {
+                            "minimum": 0,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "sha256",
+                          "size"
+                        ],
+                        "type": "object"
+                      },
+                      "name": {
+                        "description": "expected normalized package identifier, not a path or command",
+                        "maxLength": 128,
+                        "pattern": "^[a-z0-9][a-z0-9+@._-]*$(?![\\s\\S])",
+                        "type": "string"
+                      },
+                      "version": {
+                        "description": "expected exact numeric-leading backend version, not a range, tag or command",
+                        "maxLength": 128,
+                        "minLength": 1,
+                        "pattern": "^[0-9][A-Za-z0-9.+:~_-]*$(?![\\s\\S])",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "version",
+                      "artifact"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "platform": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "arch": {
+                      "enum": [
+                        "x86_64",
+                        "arm64"
+                      ],
+                      "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
+                      "type": "string"
+                    },
+                    "os": {
+                      "enum": [
+                        "linux",
+                        "macos",
+                        "windows"
+                      ],
+                      "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "os",
+                    "arch"
+                  ],
+                  "type": "object"
+                },
+                "python": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "maximum_exclusive": {
+                      "description": "expected Python 3.x.y release",
+                      "pattern": "^3\\.(?:[1-9][0-9])\\.(?:0|[1-9][0-9]*)$(?![\\s\\S])",
+                      "type": "string"
+                    },
+                    "minimum": {
+                      "description": "expected Python 3.x.y release",
+                      "pattern": "^3\\.(?:[1-9][0-9])\\.(?:0|[1-9][0-9]*)$(?![\\s\\S])",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "minimum",
+                    "maximum_exclusive"
+                  ],
+                  "type": "object"
+                },
+                "schema_version": {
+                  "const": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "schema_version",
+                "platform",
+                "python",
+                "backend",
+                "packages"
+              ],
+              "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "tool": {
+            "additionalProperties": false,
+            "properties": {
+              "commands": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "arguments": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "choices": {
+                            "items": {
+                              "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "default": {
+                            "anyOf": [
+                              {
+                                "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
+                                "type": "string"
+                              },
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "help": {
+                            "maxLength": 4096,
+                            "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
+                            "type": "string"
+                          },
+                          "kind": {
+                            "enum": [
+                              "positional",
+                              "option",
+                              "flag"
+                            ],
+                            "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "expected portable lowercase identifier (not a Windows device name)",
+                            "maxLength": 64,
+                            "pattern": "^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\\.|$))[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$(?![\\s\\S])",
+                            "type": "string"
+                          },
+                          "required": {
+                            "type": "boolean"
+                          },
+                          "schema_version": {
+                            "const": 1,
+                            "type": "integer"
+                          },
+                          "value_type": {
+                            "enum": [
+                              "string",
+                              "integer",
+                              "boolean"
+                            ],
+                            "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "schema_version",
+                          "name",
+                          "kind",
+                          "value_type",
+                          "required",
+                          "default",
+                          "choices",
+                          "help"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "help": {
+                      "maxLength": 4096,
+                      "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "expected portable lowercase identifier (not a Windows device name)",
+                      "maxLength": 64,
+                      "pattern": "^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\\.|$))[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$(?![\\s\\S])",
+                      "type": "string"
+                    },
+                    "schema_version": {
+                      "const": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "name",
+                    "help",
+                    "arguments"
+                  ],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "description": {
+                "maxLength": 4096,
+                "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
+                "type": "string"
+              },
+              "entrypoint": {
+                "description": "expected module.path:callable reference, never code or a shell command",
+                "pattern": "^[a-z_][a-z0-9_]*(?:\\.[a-z_][a-z0-9_]*)*:[a-z_][a-z0-9_]*$(?![\\s\\S])",
+                "type": "string"
+              },
+              "name": {
+                "description": "expected portable lowercase identifier (not a Windows device name)",
+                "maxLength": 64,
+                "pattern": "^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\\.|$))[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$(?![\\s\\S])",
+                "type": "string"
+              },
+              "platforms": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "arch": {
+                      "enum": [
+                        "x86_64",
+                        "arm64"
+                      ],
+                      "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
+                      "type": "string"
+                    },
+                    "os": {
+                      "enum": [
+                        "linux",
+                        "macos",
+                        "windows"
+                      ],
+                      "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$(?![\\s\\S])",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "os",
+                    "arch"
+                  ],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "python": {
+                "additionalProperties": false,
+                "properties": {
+                  "maximum_exclusive": {
+                    "description": "expected Python 3.x.y release",
+                    "pattern": "^3\\.(?:[1-9][0-9])\\.(?:0|[1-9][0-9]*)$(?![\\s\\S])",
+                    "type": "string"
+                  },
+                  "minimum": {
+                    "description": "expected Python 3.x.y release",
+                    "pattern": "^3\\.(?:[1-9][0-9])\\.(?:0|[1-9][0-9]*)$(?![\\s\\S])",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "minimum",
+                  "maximum_exclusive"
+                ],
+                "type": "object"
+              },
+              "schema_version": {
+                "const": 1,
+                "type": "integer"
+              },
+              "version": {
+                "description": "expected SemVer 2.0 (for example 1.2.3)",
+                "maxLength": 128,
+                "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$(?![\\s\\S])",
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "name",
+              "version",
+              "description",
+              "entrypoint",
+              "python",
+              "platforms",
+              "commands"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "tool",
+          "artifact",
+          "locks"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "version": {
+      "description": "expected SemVer 2.0 (for example 1.2.3)",
+      "maxLength": 128,
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$(?![\\s\\S])",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "name",
+    "version",
+    "releases"
+  ],
+  "title": "CatalogRelease",
+  "type": "object"
+}

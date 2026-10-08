@@ -20,7 +20,7 @@ classifiers = [
 
 [project.optional-dependencies]
 rich = ["rich>=13.9.4,<15"]
-dev = ["build==1.6.1", "pytest==9.1.1", "pytest-cov==7.1.0", "mypy==2.4.0", "ruff==0.16.10", "diff-cover==10.6.0", "twine==6.2.0", "pip-audit==2.10.1"]
+dev = ["build==1.6.1", "pytest==9.1.1", "pytest-cov==7.1.0", "mypy==2.4.0", "ruff==0.16.10", "diff-cover==10.6.0", "twine==6.2.0", "pip-audit==2.10.1", "jsonschema==4.26.0"]
 
 [project.scripts]
 scriptkit = "scriptkit.entrypoint:main"
@@ -31,6 +31,9 @@ Issues = "https://github.com/pokanop/scriptkit/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"scriptkit.contracts.resources" = ["*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

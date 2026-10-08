@@ -91,7 +91,7 @@ def main() -> None:
                 capture_output=True,
             )
             assert result.returncode == code, result
-        run(str(python), "-m", "pip", "install", "pytest==9.1.1")
+        run(str(python), "-m", "pip", "install", "pytest==9.1.1", "jsonschema==4.26.0")
         shutil.copytree(root / "tests", work / "tests")
         run(str(python), "-I", "-m", "pytest", "-q", "tests", "--junitxml=results.xml")
         verify(work / "results.xml")

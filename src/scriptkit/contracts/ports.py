@@ -1,0 +1,67 @@
+"""Narrow injected ports. Implementations live in their owning upper layers.
+
+Methods are synchronous, propagate cancellation (KeyboardInterrupt), and must
+not translate cancellation into success. No implicit global state or credentials.
+All filesystem paths are relative to an adapter-owned, confined root.
+"""
+
+from __future__ import annotations
+
+from typing import Protocol
+
+from .models import AIProposal, Artifact, CatalogRelease, DependencyLock, ToolSpec
+
+
+class ArtifactSource(Protocol):
+    def catalog(self, name: str, version: str) -> CatalogRelease:
+        """Load an exact catalog, locally or remotely; never implicitly latest."""
+        ...
+
+    def fetch(self, artifact: Artifact) -> bytes:
+        """Return bytes verified against artifact size and SHA-256 or raise."""
+        ...
+
+
+class PackageBackend(Protocol):
+    def available(self, lock: DependencyLock) -> bool:
+        """Check backend/platform compatibility without modifying the host."""
+        ...
+
+    def install(self, lock: DependencyLock, destination: str) -> tuple[Artifact, ...]:
+        """Install exact locked versions into a staged root; return file inventory.
+
+        Never activate a generation. On error the manager owns staged cleanup.
+        """
+        ...
+
+
+class FileSystem(Protocol):
+    def read_bytes(self, path: str) -> bytes: ...
+    def write_atomic(self, path: str, data: bytes) -> None:
+        """Replace one file atomically; failure preserves its previous contents."""
+        ...
+
+    def exists(self, path: str) -> bool: ...
+    def remove_tree(self, path: str) -> None:
+        """Delete a confined staging root; missing paths are harmless."""
+        ...
+
+    def activate(self, staged: str, active: str) -> None:
+        """Atomically replace the active pointer; no partial visible generation."""
+        ...
+
+
+class Clock(Protocol):
+    def unix_seconds(self) -> int: ...
+
+
+class Output(Protocol):
+    def emit(self, level: str, message: str) -> None:
+        """Present an event; adapters own formatting and secret redaction."""
+        ...
+
+
+class ProposalProvider(Protocol):
+    def propose(self, request_id: str, prompt: str, base: ToolSpec | None) -> AIProposal:
+        """Return untrusted data for validation/review, never execute or install."""
+        ...

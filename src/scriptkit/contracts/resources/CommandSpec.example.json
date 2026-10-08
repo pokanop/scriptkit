@@ -1,0 +1,1 @@
+{"arguments":[{"choices":[],"default":null,"help":"Target to inspect","kind":"positional","name":"target","required":true,"schema_version":1,"value_type":"string"}],"help":"Inspect local files","name":"inspect","schema_version":1}
