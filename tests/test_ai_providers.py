@@ -141,6 +141,7 @@ def test_budget_retry_and_repeated_call_caps(project):
         b'{"choices":[{"message":{"content":4}}]}',
         b"x" * (MAX_RESPONSE * 8 + 1),
     ],
+    ids=["missing-fields", "array", "empty-choices", "nontext-content", "oversized"],
 )
 def test_invalid_wire_output(project, raw):
     context = select(project, ())
@@ -233,7 +234,9 @@ def test_credentials_lazy_and_isolated(project, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "goal", ["", "x" * 4097, "api_key='synthetic-secret'", "-----BEGIN RSA PRIVATE KEY-----"]
+    "goal",
+    ["", "x" * 4097, "api_key='synthetic-secret'", "-----BEGIN RSA PRIVATE KEY-----"],
+    ids=["empty", "oversized", "credential", "private-key"],
 )
 def test_secret_and_goal_validation(project, goal):
     context = select(project, ())
