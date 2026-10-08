@@ -24,6 +24,13 @@ python_version="3.13.0", generation="generation-one", destination="tools/name")`
 There is no unqualified lookup, latest/range resolution or fallback between
 registries. Catalog name must equal its registered namespace.
 
+For POK-621's injected `ArtifactSource` port, use
+`RegistryArtifactSource(resolver, namespace, offline=False)`. Its
+`catalog(name, version)` requires the exact bound namespace and catalog version;
+`fetch(artifact)` accepts only artifacts in that pinned catalog and rechecks
+registration/expiry on every call. It never silently follows replacement pins to
+fetch an artifact that the new catalog does not authorize.
+
 The result contains the exact origin and pinned catalog, full InstallPlan with
 Python/platform constraints, selected transitive artifact hashes, and canonical
 SHA-256s of embedded platform locks. Locks are retrieved as part of the pinned
@@ -54,6 +61,15 @@ uses a 30-second socket timeout, refuses redirects and encoded responses. HTTP,
 file URLs, credentials, queries and encoded/traversal origin paths are forbidden.
 Fixture tests inject a local in-memory transport, not an insecure production mode.
 
+Intended hosting is direct static HTTPS file serving (for example nginx or an
+S3 REST endpoint with no redirects), with an origin such as
+`https://registry.example/releases/v1-2/`. Paths in the origin use lowercase
+letters, digits, underscores and hyphens; artifact-relative paths support dots.
+GitHub Releases redirecting asset URLs are deliberately unsupported. Mirror those
+assets onto the consented static origin; do not relax redirects or reuse an
+expiring signed URL as a registry origin. This is a hosting contract, not a claim
+that a production registry has already been deployed.
+
 Cache keys are SHA-256; contents are rehashed and size-checked on every read.
 Publication is atomic only after verification. Corruption fails closed rather
 than silently replacing evidence. A complete cache supports `offline=True` with
@@ -62,7 +78,9 @@ stale-if-error or implicit refresh. Expiry is pinned locally and relies on the
 injected/system clock. Remove/re-add with new explicit consent to renew metadata.
 Cache GC is caller-owned; deleting unused blobs is safe. Interrupted downloads do
 not publish cache entries; a crash during state publication may require explicit
-lock recovery per `docs/io.md` (if present) / `scriptkit.state` documentation.
+lock recovery per [runtime IO](runtime-io.md). Concurrent cache publication is
+best-effort: a losing writer returns its own verified bytes without claiming the
+cache write succeeded. Other IO errors and cancellation still propagate.
 
 State and cache directories must be private and trusted, including all parents;
 this is not protection from a hostile local user changing parent symlinks. Windows

@@ -13,7 +13,7 @@ LAYERS = {"contracts", "registry", "manager", "generator", "ai"}
 ALLOWED = {
     "runtime": {"runtime"},
     "contracts": {"contracts"},
-    "registry": {"registry", "contracts"},
+    "registry": {"registry", "contracts", "state"},
     "manager": {"manager", "contracts"},
     "generator": {"generator", "contracts"},
     "ai": {"ai", "contracts"},
@@ -60,11 +60,13 @@ def violations(text, module, is_package=False):
     errors = []
     for target in imports(text, module, is_package):
         if target.startswith("scriptkit.") or target == "scriptkit":
-            # Registry reuses only the hardened state adapter/port, not runtime UI.
-            state_adapter = source == "registry" and (
+            # The sole runtime exception is explicit in ALLOWED: registry state IO.
+            target_layer = layer(target)
+            if source == "registry" and (
                 target == "scriptkit.state" or target.startswith("scriptkit.state.")
-            )
-            if layer(target) not in ALLOWED[source] and not state_adapter:
+            ):
+                target_layer = "state"
+            if target_layer not in ALLOWED[source]:
                 errors.append(f"{module} -> {target}")
         elif source == "contracts" and target.split(".")[0] not in sys.stdlib_module_names | {
             "__future__"
@@ -98,6 +100,8 @@ def test_checker_detects_regressions():
         ("import scriptkit.generator", "scriptkit.contracts.models"),
         ("from .. import manager", "scriptkit.contracts.models"),
         ("import requests", "scriptkit.contracts.models"),
+        ("import scriptkit.console", "scriptkit.registry.cache"),
+        ("import scriptkit.state", "scriptkit.contracts.models"),
         ("importlib.import_module('scriptkit.ai')", "scriptkit.app"),
         ("__import__(computed)", "scriptkit.app"),
         ("from importlib import import_module; import_module('scriptkit.ai')", "scriptkit.app"),

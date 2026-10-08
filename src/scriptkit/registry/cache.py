@@ -11,7 +11,7 @@ from typing import Protocol
 
 from scriptkit.contracts.codec import ContractError
 from scriptkit.contracts.models import INVENTORY_PATH, Artifact
-from scriptkit.state import LocalStateIO, StateIO
+from scriptkit.state import LocalStateIO, StateConflict, StateIO
 
 from .trust import origin_url
 
@@ -86,7 +86,12 @@ class VerifiedCache:
                 raise ContractError("verified cache incomplete; offline download forbidden")
             raw = self.transport.fetch(origin + artifact.path, artifact.size)
             self._verify(raw, artifact)
-            self.io.replace(path, raw, expected=None)
+            try:
+                self.io.replace(path, raw, expected=None)
+            except StateConflict:
+                # Another writer won or still holds the publication lock. Return
+                # our verified bytes; cache persistence is best-effort, not trust.
+                pass
         else:
             self._verify(raw, artifact)
         return raw

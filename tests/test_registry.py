@@ -273,7 +273,11 @@ def test_bounded_transport(monkeypatch, headers, data):
             response.headers = headers
             return response
 
-    monkeypatch.setattr("urllib.request.build_opener", lambda *args: Opener())
+    def build_opener(*handlers):
+        assert len(handlers) == 1 and isinstance(handlers[0], NoRedirect)
+        return Opener()
+
+    monkeypatch.setattr("urllib.request.build_opener", build_opener)
     if data == b"123":
         assert HTTPTransport().fetch(ORIGIN + "catalog.json", 3) == data
     else:

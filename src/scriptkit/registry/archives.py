@@ -6,6 +6,7 @@ import io
 import re
 import stat
 import zipfile
+import zlib
 
 from scriptkit.contracts.codec import ContractError
 from scriptkit.contracts.models import INVENTORY_PATH
@@ -59,6 +60,15 @@ def validate_archive(path: str, raw: bytes, *, max_expanded: int = 128 * 1024 * 
                 raise ContractError("archive file/directory collision")
             if kind == "wheel" and not any(name.endswith(".dist-info/wheel") for name in files):
                 raise ContractError("wheel metadata missing")
-    except (zipfile.BadZipFile, RuntimeError, NotImplementedError) as exc:
+    except ContractError:
+        raise
+    except (
+        zipfile.BadZipFile,
+        RuntimeError,
+        NotImplementedError,
+        zlib.error,
+        EOFError,
+        ValueError,
+    ) as exc:
         raise ContractError("invalid archive") from exc
     return kind

@@ -3,6 +3,7 @@
 from .cache import HTTPTransport, Transport, VerifiedCache
 from .resolver import ResolvedPlan, Resolver
 from .trust import Registry, RegistryStore
+from .source import RegistryArtifactSource
 
 __all__ = [
     "HTTPTransport",
@@ -12,4 +13,5 @@ __all__ = [
     "Resolver",
     "Registry",
     "RegistryStore",
+    "RegistryArtifactSource",
 ]
