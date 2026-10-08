@@ -151,6 +151,8 @@ def test_forbidden_selection_and_patch(project, path):
         b'{"schema_version":1,"schema_version":1}',
         b"x" * (MAX_RESPONSE + 1),
     ],
+    # pytest exports node IDs in PYTEST_CURRENT_TEST; Windows limits env values.
+    ids=["missing-fields", "non-json", "invalid-utf8", "array", "deep", "duplicate", "oversized"],
 )
 def test_bad_responses(raw):
     with pytest.raises(ValueError):
@@ -291,6 +293,46 @@ def test_extra_contract_failures(project):
     (project / HANDLER).write_bytes(b"x" * 65537)
     with pytest.raises(ValueError, match="budget"):
         selected(project)
+
+
+def test_crlf_content_is_preserved_and_hash_bound(project):
+    import jsonschema
+
+    raw = b"# handwritten Windows module\r\ndef run(command, values):\r\n    return {}\r\n"
+    (project / HANDLER).write_bytes(raw)
+    context = selected(project)
+    assert context.files[0].content.encode() == raw
+    assert Context.from_json(context.canonical_json()) == context
+    jsonschema.validate(context.to_dict(), Context.json_schema())
+    proposed = proposal(context)
+    content = "def run(command, values):\r\n    return {'answer': 42}\r\n"
+    proposed = replace(proposed, patches=(replace(proposed.patches[0], content=content),))
+    assert parse_response(proposed.canonical_json().encode()) == proposed
+    jsonschema.validate(proposed.to_dict(), Proposal.json_schema())
+    checked = review(project, context, proposed)
+    # Equivalent text with different bytes is still stale, not silently normalized.
+    (project / HANDLER).write_bytes(raw.replace(b"\r\n", b"\n"))
+    with pytest.raises(ValueError, match="stale"):
+        apply(project, context, proposed, approved_review_hash=checked.approval_hash)
+    (project / HANDLER).write_bytes(raw)
+    apply(project, context, proposed, approved_review_hash=checked.approval_hash)
+    assert (project / HANDLER).read_bytes() == content.encode()
+
+
+@pytest.mark.parametrize("text", ["bare\rreturn", "terminal\x1b[31m", "nul\x00", "double\r\r\n"])
+def test_crlf_opt_in_still_rejects_other_controls(text):
+    import jsonschema
+
+    for kind, value in (
+        (ContextFile, {"path": HANDLER, "content": text}),
+        (Patch, {"path": HANDLER, "base_hash": None, "content": text}),
+    ):
+        with pytest.raises(ValueError):
+            kind.from_json(json.dumps(value))
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(value, kind.json_schema())
+    with pytest.raises(ValueError):
+        SpecDelta("description\r\nnot-file-content", ())
 
 
 def test_unsafe_symlinks(project):

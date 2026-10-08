@@ -18,7 +18,7 @@ The supported writable extensions are the entrypoint package's `_handlers.py`, `
 
 The provider interface is `Provider.propose(Context, max_response_bytes=...) -> bytes`. `request(provider, context, approved_context_hash=context.identity)` requires approval of that exact preview before invoking the adapter. An adapter must enforce the response budget while receiving data, not merely after buffering an unlimited stream, and must not perform tool calls or execute returned instructions. No credentials enter the context contract. The adapter implementation itself is trusted application code.
 
-`Proposal.json_schema()` exposes the strict v1 response schema. Every field is required; unknown/duplicate keys, control characters and invalid types are rejected. An example response shape (replace hashes and command name with actual values):
+`Proposal.json_schema()` exposes the strict v1 response schema. Every field is required; unknown/duplicate keys, forbidden control characters and invalid types are rejected. File-content fields preserve both LF and CRLF exactly (including in base hashes); bare carriage returns remain forbidden. Other text fields keep the existing LF/tab-only control-character policy. An example response shape (replace hashes and command name with actual values):
 
 ```json
 {

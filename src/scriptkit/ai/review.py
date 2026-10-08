@@ -108,7 +108,7 @@ def review(root: Path, context: Context, proposal: Proposal) -> Review:
             if patch.path.startswith("tests/"):
                 file = stage / "src" / "_ai_test_checks" / Path(patch.path).name
                 file.parent.mkdir(exist_ok=True)
-                file.write_text(patch.content, encoding="utf-8")
+                file.write_bytes(patch.content.encode("utf-8"))
         report = validate(stage)
         if not report.valid:
             raise ValueError(f"static checks rejected proposal: {report.to_data()}")

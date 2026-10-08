@@ -15,6 +15,8 @@ from typing import get_type_hints as _resolve_hints
 
 
 SAFE_TEXT = r"^[^\u0000-\u0008\u000b-\u001f\u007f-\u009f]*$(?![\s\S])"
+# File-content fields may opt into exact Windows line endings, never bare CR.
+CRLF_TEXT = r"^(?:[^\u0000-\u0008\u000b-\u001f\u007f-\u009f]|\r\n)*$(?![\s\S])"
 
 
 def get_type_hints(kind: type[Any]) -> dict[str, Any]:
@@ -103,14 +105,15 @@ def _encode(value: Any) -> Any:
     return value
 
 
-def _decode(kind: Any, value: Any, path: str) -> Any:
+def _decode(kind: Any, value: Any, path: str, rules: Mapping[str, Any] | None = None) -> Any:
+    rules = rules or {}
     origin, args = get_origin(kind), get_args(kind)
     if origin in (Union, UnionType):
         if value is None and type(None) in args:
             return None
         for arg in args:
             try:
-                return _decode(arg, value, path)
+                return _decode(arg, value, path, rules)
             except ContractError:
                 pass
         raise ContractError(f"{path}: value does not match any allowed type")
@@ -129,12 +132,18 @@ def _decode(kind: Any, value: Any, path: str) -> Any:
                 f"{path}: unknown fields {sorted(unknown)}; missing fields {sorted(missing)}"
             )
         hints = get_type_hints(kind)
-        decoded = {key: _decode(hints[key], item, f"{path}.{key}") for key, item in value.items()}
+        metadata = {field.name: field.metadata for field in fields(kind)}
+        decoded = {
+            key: _decode(hints[key], item, f"{path}.{key}", metadata[key])
+            for key, item in value.items()
+        }
         try:
             return kind(**decoded)
         except ContractError as exc:
             raise ContractError(f"{path}: {exc}") from exc
-    _check(kind, value, path, {})
+    # Field constraints retain the constructor's established diagnostic paths.
+    # Only text decoding needs the opt-in before construction takes place.
+    _check(kind, value, path, {"allow_crlf": rules.get("allow_crlf", False)})
     return value
 
 
@@ -157,7 +166,8 @@ def _check(kind: Any, value: Any, path: str, rules: Mapping[str, Any]) -> None:
             _check(args[0], item, f"{path}[{i}]", {})
     elif type(value) is not kind:
         raise ContractError(f"{path}: expected {kind.__name__}, got {type(value).__name__}")
-    if kind is str and re.fullmatch(SAFE_TEXT, value) is None:
+    text_pattern = CRLF_TEXT if rules.get("allow_crlf") else SAFE_TEXT
+    if kind is str and re.fullmatch(text_pattern, value) is None:
         raise ContractError(f"{path}: control characters are forbidden except newline and tab")
     if "const" in rules and value != rules["const"]:
         raise ContractError(f"{path}: unsupported value {value!r}; expected {rules['const']!r}")
@@ -173,10 +183,10 @@ def _check(kind: Any, value: Any, path: str, rules: Mapping[str, Any]) -> None:
             raise ContractError(f"{path}: violates {bound} {rules[bound]}")
 
 
-def _schema(kind: Any) -> dict[str, Any]:
+def _schema(kind: Any, *, allow_crlf: bool = False) -> dict[str, Any]:
     origin, args = get_origin(kind), get_args(kind)
     if origin in (Union, UnionType):
-        return {"anyOf": [_schema(arg) for arg in args]}
+        return {"anyOf": [_schema(arg, allow_crlf=allow_crlf) for arg in args]}
     if origin is tuple:
         return {"type": "array", "items": _schema(args[0])}
     if isinstance(kind, type) and is_dataclass(kind):
@@ -186,11 +196,15 @@ def _schema(kind: Any) -> dict[str, Any]:
             "additionalProperties": False,
             "required": [f.name for f in fields(kind)],
             "properties": {
-                f.name: {**_schema(hints[f.name]), **dict(f.metadata)} for f in fields(kind)
+                f.name: {
+                    **_schema(hints[f.name], allow_crlf=f.metadata.get("allow_crlf", False)),
+                    **{k: v for k, v in f.metadata.items() if k != "allow_crlf"},
+                }
+                for f in fields(kind)
             },
         }
     if kind is str:
-        return {"type": "string", "pattern": SAFE_TEXT}
+        return {"type": "string", "pattern": CRLF_TEXT if allow_crlf else SAFE_TEXT}
     return {"type": {int: "integer", bool: "boolean", type(None): "null"}[kind]}
 
 

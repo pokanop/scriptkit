@@ -13,7 +13,7 @@ MAX_CONTEXT = 512 * 1024
 @record
 class ContextFile(Record):
     path: str = path()
-    content: str | None = constrained(maxLength=65536)
+    content: str | None = constrained(maxLength=65536, allow_crlf=True)
 
     @property
     def base_hash(self) -> str | None:
@@ -55,7 +55,7 @@ class SpecDelta(Record):
 class Patch(Record):
     path: str = path()
     base_hash: str | None = digest()
-    content: str = constrained(maxLength=65536)
+    content: str = constrained(maxLength=65536, allow_crlf=True)
 
 
 @record
