@@ -126,8 +126,9 @@ def test_launcher_exec_preserves_pid_and_signal_semantics(tmp_path, sig):
 import os, sys, time
 def main():
     if '--help' in sys.argv: return 0
-    print(os.getpid(), flush=True)
-    try: time.sleep(60)
+    try:
+        print(os.getpid(), flush=True)
+        time.sleep(60)
     except KeyboardInterrupt: return 130
 """,
     )
