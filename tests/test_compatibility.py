@@ -21,7 +21,9 @@ def test_public_exports_and_signatures():
     assert (sk.EXIT_OK, sk.EXIT_ERROR, sk.EXIT_INTERRUPT) == (0, 1, 130)
 
 
-@pytest.mark.parametrize("value, expected", [(None, 0), (True, 0), (False, 0), ("7", 0), (7, 7), (-1, -1)])
+@pytest.mark.parametrize(
+    "value, expected", [(None, 0), (True, 0), (False, 0), ("7", 0), (7, 7), (-1, -1)]
+)
 def test_exit_return_compatibility(value, expected):
     assert sk.run_cli(lambda: value) == expected
 

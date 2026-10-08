@@ -16,7 +16,10 @@ are local. Tests do not require provider keys. Never commit credentials or local
 venvs. Test the installed wheel, not only editable imports. New runtime code must
 include success/failure/interruption tests as applicable; new code should achieve
 at least 90% changed-line coverage and cover critical recovery/security branches.
-The baseline enforces 90% on the new entrypoint; legacy runtime is unchanged.
+CI enforces 90% changed-line coverage across the framework, a 12-cell platform/Python
+matrix, static checks, dependency auditing, and clean release rehearsals. See the
+[quality and release contract](docs/quality-and-release.md) for required gates,
+explicit legacy typing/formatting debt, provenance, and owner publishing setup.
 
 Keep typed boundaries narrow and inject argv/IO/platform/provider dependencies.
 Follow [ownership](docs/architecture.md) and [SemVer](docs/compatibility.md).

@@ -11,7 +11,9 @@ def test_deep_merge_nested():
     base = {"a": {"b": 1, "c": 2}, "d": 3}
     override = {"a": {"c": 9, "e": 5}, "f": 6}
     assert config.deep_merge(base, override) == {
-        "a": {"b": 1, "c": 9, "e": 5}, "d": 3, "f": 6,
+        "a": {"b": 1, "c": 9, "e": 5},
+        "d": 3,
+        "f": 6,
     }
 
 

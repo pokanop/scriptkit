@@ -11,12 +11,13 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 import tempfile
 import venv
 
+from verify_results import verify
 
-SMOKE = r'''
+
+SMOKE = r"""
 import importlib.metadata as metadata
 import importlib.util
 from pathlib import Path
@@ -35,14 +36,17 @@ assert sk.run_cli(lambda: True) == 0
 assert sk.run_cli(lambda: 7) == 7
 assert sk.Config("missing.json", defaults={"answer": 42}).load().get("answer") == 42
 sk.table(["name"], [["wheel"]])
-'''
+"""
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wheel", type=Path)
     parser.add_argument("--rich", action="store_true")
+    parser.add_argument("--rich-version", help="Test a specific supported Rich version")
     args = parser.parse_args()
+    if args.rich_version and not args.rich:
+        parser.error("--rich-version requires --rich")
     wheel = args.wheel.resolve(strict=True)
     root = Path(__file__).resolve().parent.parent
     with tempfile.TemporaryDirectory(prefix="scriptkit-artifact-") as tmp:
@@ -59,7 +63,8 @@ def main() -> None:
             subprocess.run(argv, cwd=work, env=env, check=True)
 
         if args.rich:
-            run(str(python), "-m", "pip", "install", f"{wheel}[rich]")
+            constraints = [f"rich=={args.rich_version}"] if args.rich_version else []
+            run(str(python), "-m", "pip", "install", f"{wheel}[rich]", *constraints)
         else:
             run(str(python), "-m", "pip", "install", "--no-deps", str(wheel))
         run(str(python), "-I", "-c", SMOKE, "rich" if args.rich else "bare")
@@ -75,13 +80,21 @@ def main() -> None:
             ("def main(): raise KeyboardInterrupt", 130),
         ]:
             result = subprocess.run(
-                [str(python), "-I", "-c", "import scriptkit as sk\n" + source + "\nraise SystemExit(sk.run_cli(main))"],
-                cwd=work, env=env, capture_output=True,
+                [
+                    str(python),
+                    "-I",
+                    "-c",
+                    "import scriptkit as sk\n" + source + "\nraise SystemExit(sk.run_cli(main))",
+                ],
+                cwd=work,
+                env=env,
+                capture_output=True,
             )
             assert result.returncode == code, result
-        run(str(python), "-m", "pip", "install", "pytest>=8")
+        run(str(python), "-m", "pip", "install", "pytest==9.1.1")
         shutil.copytree(root / "tests", work / "tests")
-        run(str(python), "-I", "-m", "pytest", "-q", "tests")
+        run(str(python), "-I", "-m", "pytest", "-q", "tests", "--junitxml=results.xml")
+        verify(work / "results.xml")
         print(f"Installed wheel verified ({'rich' if args.rich else 'bare'}): {wheel.name}")
 
 
