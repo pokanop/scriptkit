@@ -35,12 +35,14 @@ class Installer:
         source: InstallationSource,
         *,
         backend: PackageBackend | None = None,
+        launcher_interpreter: str | None = None,
         checkpoint: Callable[[str], None] = lambda phase: None,
     ):
         self.root = Path(os.path.abspath(root))
         self.bin_dir = Path(os.path.abspath(bin_dir))
         self.source = source
         self.backend = backend or PipBackend()
+        self.launcher_interpreter = launcher_interpreter
         self.checkpoint = checkpoint
         for path in (self.root, self.bin_dir):
             if any(p.is_symlink() for p in (path, *path.parents)):
@@ -55,7 +57,9 @@ class Installer:
         return tool
 
     def _files(self, name: str) -> dict[Path, bytes]:
-        return launchers.launchers(self._tool(name), self.bin_dir, name)
+        return launchers.launchers(
+            self._tool(name), self.bin_dir, name, interpreter=self.launcher_interpreter
+        )
 
     def _ownership(self, name: str) -> dict[str, str]:
         tool = self._tool(name)
@@ -105,6 +109,10 @@ class Installer:
         ):
             raise ValueError("invalid generation pointer")
         return target
+
+    def current_generation(self, name: str) -> str | None:
+        """Return lineage for planning; installation rechecks under its lock."""
+        return self._active(name)
 
     def validate(self, resolved: ResolvedPlan) -> None:
         plan = resolved.installation

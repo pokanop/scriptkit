@@ -40,7 +40,7 @@ def hashes(directory: Path) -> dict[str, str]:
     return {
         path.name: hashlib.sha256(path.read_bytes()).hexdigest()
         for path in sorted(directory.iterdir())
-        if path.name.endswith((".whl", ".tar.gz"))
+        if path.name.endswith((".whl", ".tar.gz", ".py", ".sh", ".ps1"))
     }
 
 
@@ -100,6 +100,9 @@ def main() -> None:
                 cwd=clean,
                 env=env,
             )
+            for installer in ("install.sh", "install.ps1"):
+                shutil.copy2(clean / installer, clean / "dist" / installer)
+            shutil.copy2(clean / "src/scriptkit/bootstrap.py", clean / "dist/bootstrap.py")
             results.append(hashes(clean / "dist"))
         if results[0] != results[1]:
             raise ValueError(f"Non-reproducible release: {results}")

@@ -88,7 +88,7 @@ def test_ownership_graph():
         if is_package:
             parts.pop()
         module = ".".join(["scriptkit", *parts])
-        if module in {"scriptkit.entrypoint", "scriptkit.__main__"}:
+        if module in {"scriptkit.entrypoint", "scriptkit.__main__", "scriptkit.manager_cli"}:
             continue  # composition roots alone may wire upper layers
         errors.extend(violations(path.read_text(encoding="utf-8"), module, is_package))
     assert not errors, "\n".join(errors)

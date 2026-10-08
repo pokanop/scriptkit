@@ -10,7 +10,10 @@ import tempfile
 from pathlib import Path
 
 
-def launchers(tool: Path, bin_dir: Path, name: str) -> dict[Path, bytes]:
+def launchers(
+    tool: Path, bin_dir: Path, name: str, *, interpreter: str | None = None
+) -> dict[Path, bytes]:
+    interpreter = interpreter or sys.executable
     loader = tool / "launch.py"
     source = (
         "import json, os, pathlib, subprocess, sys\n"
@@ -27,12 +30,12 @@ def launchers(tool: Path, bin_dir: Path, name: str) -> dict[Path, bytes]:
     ).encode()
     if os.name == "nt":
         # cmd expands these characters even inside quoted paths.
-        if any(c in str(loader) + sys.executable for c in '%!\r\n"'):
+        if any(c in str(loader) + interpreter for c in '%!\r\n"'):
             raise ValueError("launcher paths cannot contain cmd expansion characters")
-        wrapper = f'@echo off\r\n"{sys.executable}" -I "{loader}" %*\r\n'.encode()
+        wrapper = f'@echo off\r\n"{interpreter}" -I "{loader}" %*\r\n'.encode()
         command = bin_dir / (name + ".cmd")
     else:
-        wrapper = f'#!/bin/sh\nexec {shlex.quote(sys.executable)} -I {shlex.quote(str(loader))} "$@"\n'.encode()
+        wrapper = f'#!/bin/sh\nexec {shlex.quote(interpreter)} -I {shlex.quote(str(loader))} "$@"\n'.encode()
         command = bin_dir / name
     return {loader: source, command: wrapper}
 

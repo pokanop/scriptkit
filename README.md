@@ -2,8 +2,9 @@
 
 A dependency-light Python **3.11+** runtime for cohesive command-line tools.
 This repository ships the compatible 1.3.0 runtime, versioned data contracts,
-and an opt-in [deterministic project generator](docs/generator.md).
-The full installer, manager, registry and AI product remain under development.
+an opt-in [deterministic project generator](docs/generator.md), and a
+[verified bootstrap and transactional tool manager](docs/bootstrap.md).
+AI integration remains under development.
 
 > The working name overlaps with [johnlindquist/kit](https://github.com/johnlindquist/kit),
 > a separate project. No affiliation is implied. `pokanop-scriptkit` is provisional
@@ -22,8 +23,10 @@ scriptkit --version
 python -m scriptkit --help
 ```
 
-The `scriptkit` command currently provides help/version only. Unknown commands
-fail with argparse exit 2 rather than pretending that a manager exists.
+The `scriptkit` command exposes doctor, registry/catalog, tool lifecycle and
+staged manager self-update. See [bootstrap instructions](docs/bootstrap.md) for
+pinned release inputs, no-PATH installation, repair and rollback. Bare invocation
+shows help without modifying state; unknown commands fail with argparse exit 2.
 
 ```python
 import scriptkit as sk

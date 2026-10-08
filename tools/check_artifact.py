@@ -58,6 +58,7 @@ def main() -> None:
         command = bindir / ("scriptkit.exe" if os.name == "nt" else "scriptkit")
         env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYTHONHOME")}
         env["PYTHONUTF8"] = "1"
+        env["SCRIPTKIT_TEST_WHEEL"] = str(wheel)
 
         def run(*argv: str) -> None:
             subprocess.run(argv, cwd=work, env=env, check=True)
@@ -94,6 +95,8 @@ def main() -> None:
         run(str(python), "-m", "pip", "install", "pytest==9.1.1", "jsonschema==4.26.0")
         shutil.copytree(root / "tests", work / "tests")
         shutil.copytree(root / "examples", work / "examples")
+        for installer in ("install.sh", "install.ps1"):
+            shutil.copy(root / installer, work / installer)
         run(str(python), "-I", "-m", "pytest", "-q", "tests", "--junitxml=results.xml")
         verify(work / "results.xml")
         print(f"Installed wheel verified ({'rich' if args.rich else 'bare'}): {wheel.name}")

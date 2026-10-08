@@ -5,7 +5,7 @@ from scriptkit.entrypoint import main
 
 def test_bare_help(capsys):
     assert main([]) == 0
-    assert "not yet available" in capsys.readouterr().out
+    assert "isolated tool manager" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("flag", ["-h", "--help", "--version"])
@@ -18,6 +18,6 @@ def test_metadata(flag, capsys):
 
 def test_unknown_command(capsys):
     with pytest.raises(SystemExit) as exc:
-        main(["install"])
+        main(["unknown-command"])
     assert exc.value.code == 2
-    assert "unrecognized arguments" in capsys.readouterr().err
+    assert "invalid choice" in capsys.readouterr().err
