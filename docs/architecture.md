@@ -7,18 +7,37 @@ Authoritative framework repository: https://github.com/pokanop/scriptkit.
 | --- | --- |
 | Runtime: `src/scriptkit/{app,blocks,cli,config,console,doctor,proc,progress,style,tables,text}.py`, `__init__.py` | Existing 1.3.0 API, dependency-light, never imports manager/registry/generator/AI. |
 | Composition root: `entrypoint.py`, `__main__.py` | Typed `main(argv: Sequence[str] \| None) -> int` injectable argument boundary. Help/version only. Do not put business logic here. |
-| Contracts: future `scriptkit.contracts` (POK-617) | Versioned typed records/protocols shared by upper layers; depends only on stdlib. Not implemented in this extraction. |
+| Contracts: `scriptkit.contracts` (POK-617) | Versioned frozen records, strict codec, resource schemas/examples and injected ports; depends only on stdlib. See [contracts](contracts.md). |
 | Manager: future `scriptkit.manager` (POK-621/622) | Transaction orchestration; inject registry/platform adapters, not global services. |
 | Registry: future `scriptkit.registry` (POK-620) | Resolution, verification/cache adapters; no CLI or AI dependency. |
 | Generator: future `scriptkit.generator` (POK-623/624) | Deterministic spec-to-files logic, independent from manager and AI. |
 | AI: future `scriptkit.ai` (POK-626/627) | Optional proposal/provider adapters; calls generator contracts, never imported by runtime. |
 
-Only the runtime and typed CLI composition boundary exist today. Do not create
-placeholder implementations or speculative protocol APIs for later tickets.
-Existing typed result records (`proc.Result`, `doctor.Check`, `blocks.ManagedBlock`)
-remain intact. Preserve runtime signatures during extraction; full protocol/schema
-ownership and type-check expansion belong to POK-617. We do not yet declare the
-whole inherited library PEP 561-complete (`py.typed`).
+Runtime, CLI composition boundary and contracts exist today; concrete upper-layer
+adapters remain in their owning tickets. Existing typed result records
+(`proc.Result`, `doctor.Check`, `blocks.ManagedBlock`) and runtime signatures remain
+intact. We do not declare the whole inherited library PEP 561-complete (`py.typed`).
+
+## Executable import graph
+
+```text
+entrypoint / __main__ (composition root)
+    ├── runtime → stdlib, optional Rich
+    ├── manager ────┐
+    ├── registry ───┤
+    ├── generator ──┼──→ contracts → stdlib
+    └── AI ─────────┘
+```
+
+Upper layers may import themselves and contracts, not one another. Cross-layer
+calls use injected ports; composition roots wire concrete implementations. Runtime
+does not import contracts or any upper layer. Contracts import neither runtime nor
+upper layers, and load no optional package. `tests/test_architecture.py` checks
+absolute/relative/static dynamic imports, rejects computed dynamic imports, tests
+its own negative fixtures, and imports core behind a blocking import hook in an
+isolated process. It scans the installed package too, so wheel tests enforce the
+same graph. This is a regression guard, not a sandbox for malicious Python code.
+Run `python -m pytest tests/test_architecture.py` to check ownership boundaries.
 
 ## Template resources
 

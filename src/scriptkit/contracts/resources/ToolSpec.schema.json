@@ -1,0 +1,197 @@
+{
+  "$id": "urn:scriptkit:contracts:ToolSpec:1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "commands": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "arguments": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "choices": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "default": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "help": {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "positional",
+                    "option",
+                    "flag"
+                  ],
+                  "type": "string"
+                },
+                "name": {
+                  "description": "expected portable lowercase identifier (not a Windows device name)",
+                  "maxLength": 64,
+                  "pattern": "^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\\.|$))[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$(?![\\s\\S])",
+                  "type": "string"
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "schema_version": {
+                  "const": 1,
+                  "type": "integer"
+                },
+                "value_type": {
+                  "enum": [
+                    "string",
+                    "integer",
+                    "boolean"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "schema_version",
+                "name",
+                "kind",
+                "value_type",
+                "required",
+                "default",
+                "choices",
+                "help"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "help": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "name": {
+            "description": "expected portable lowercase identifier (not a Windows device name)",
+            "maxLength": 64,
+            "pattern": "^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\\.|$))[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$(?![\\s\\S])",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "name",
+          "help",
+          "arguments"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "description": {
+      "maxLength": 4096,
+      "type": "string"
+    },
+    "entrypoint": {
+      "description": "expected module.path:callable reference, never code or a shell command",
+      "pattern": "^[a-z_][a-z0-9_]*(?:\\.[a-z_][a-z0-9_]*)*:[a-z_][a-z0-9_]*$(?![\\s\\S])",
+      "type": "string"
+    },
+    "name": {
+      "description": "expected portable lowercase identifier (not a Windows device name)",
+      "maxLength": 64,
+      "pattern": "^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\\.|$))[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$(?![\\s\\S])",
+      "type": "string"
+    },
+    "platforms": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "arch": {
+            "enum": [
+              "x86_64",
+              "arm64"
+            ],
+            "type": "string"
+          },
+          "os": {
+            "enum": [
+              "linux",
+              "macos",
+              "windows"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "os",
+          "arch"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "python": {
+      "additionalProperties": false,
+      "properties": {
+        "maximum_exclusive": {
+          "description": "expected Python 3.x.y release",
+          "pattern": "^3\\.(?:[1-9][0-9])\\.(?:0|[1-9][0-9]*)$(?![\\s\\S])",
+          "type": "string"
+        },
+        "minimum": {
+          "description": "expected Python 3.x.y release",
+          "pattern": "^3\\.(?:[1-9][0-9])\\.(?:0|[1-9][0-9]*)$(?![\\s\\S])",
+          "type": "string"
+        }
+      },
+      "required": [
+        "minimum",
+        "maximum_exclusive"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "version": {
+      "description": "expected SemVer 2.0 (for example 1.2.3)",
+      "maxLength": 128,
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$(?![\\s\\S])",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "name",
+    "version",
+    "description",
+    "entrypoint",
+    "python",
+    "platforms",
+    "commands"
+  ],
+  "title": "ToolSpec",
+  "type": "object"
+}

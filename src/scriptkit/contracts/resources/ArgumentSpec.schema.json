@@ -1,0 +1,74 @@
+{
+  "$id": "urn:scriptkit:contracts:ArgumentSpec:1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "choices": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "default": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "help": {
+      "maxLength": 4096,
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "positional",
+        "option",
+        "flag"
+      ],
+      "type": "string"
+    },
+    "name": {
+      "description": "expected portable lowercase identifier (not a Windows device name)",
+      "maxLength": 64,
+      "pattern": "^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\\.|$))[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$(?![\\s\\S])",
+      "type": "string"
+    },
+    "required": {
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "value_type": {
+      "enum": [
+        "string",
+        "integer",
+        "boolean"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "name",
+    "kind",
+    "value_type",
+    "required",
+    "default",
+    "choices",
+    "help"
+  ],
+  "title": "ArgumentSpec",
+  "type": "object"
+}
