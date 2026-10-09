@@ -38,5 +38,11 @@ a guarantee that arbitrary packages or model-generated code are safe.
 CI uses synthetic credentials and read-only permissions for PR tests. Release
 provenance/publication jobs have narrowly scoped additional permissions and
 must pass the same quality gates; dispatch alone cannot publish to PyPI.
-Independent review on the exact head remains a delivery requirement, separate
-from test success. Never use admin merge bypasses to waive security failures.
+Independent review on the exact head remains a procedural delivery requirement,
+separate from test success. Currently `main` has no branch protection/ruleset;
+CI success and PR approval are not technically enforced at merge or direct-push
+time. The admin identity agents use can also bypass the tag ruleset. These are
+unresolved administrative risks requiring the owner's enforcement or explicit
+acceptance, not security guarantees. PyPI's environment blocks admin bypass and
+self-review, but its sole reviewer is that same identity, so agent-pushed tags
+currently have no eligible approver. See the assessment for the owner decision.
