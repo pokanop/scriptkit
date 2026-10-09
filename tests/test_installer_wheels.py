@@ -16,9 +16,13 @@ from test_installer import archive, artifact, fixture
         "Name: dependency\nName: other\nVersion: 1.0.0\n",
     ],
 )
-def test_dependency_wheel_identity(tmp_path, metadata):
+@pytest.mark.parametrize("vendored", [False, True])
+def test_dependency_wheel_identity(tmp_path, metadata, vendored):
     _, resolved = fixture(tmp_path)
-    raw = archive({"dependency-1.0.0.dist-info/METADATA": metadata})
+    entries = {"dependency-1.0.0.dist-info/METADATA": metadata}
+    if vendored:
+        entries["dependency/_vendor/other-2.0.dist-info/METADATA"] = "Name: other\nVersion: 2.0\n"
+    raw = archive(entries)
     item = artifact("dependency-1.0.0-py3-none-any.whl", raw)
     lock = replace(
         resolved.installation.release.locks[0],
@@ -37,7 +41,9 @@ def test_dependency_wheel_identity(tmp_path, metadata):
 @pytest.mark.parametrize("filename", ["dependency.tar.gz", "dependency.whl"])
 def test_dependency_rejects_source_and_missing_metadata(tmp_path, filename):
     _, resolved = fixture(tmp_path)
-    raw = archive({"not-metadata": "x"})
+    raw = archive(
+        {"dependency/_vendor/other.dist-info/METADATA": "Name: dependency\nVersion: 1.0.0\n"}
+    )
     item = artifact(filename, raw)
     lock = replace(
         resolved.installation.release.locks[0],

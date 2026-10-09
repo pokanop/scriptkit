@@ -26,3 +26,4 @@ jobs:
             memory.txt
             output.txt
             evidence/locked-catalog.json
+            evidence/member-scan.json

@@ -1,6 +1,7 @@
 """Explicit finite resource budgets for untrusted installation artifacts."""
 
 from dataclasses import dataclass, fields
+from typing import Literal
 
 from .codec import ContractError
 
@@ -18,11 +19,14 @@ class ArtifactPolicy:
     max_entries: int = 10000
     max_expansion_ratio: int = 128 * 1024 * 1024
     command_timeout: int = 120
-    allow_member_spaces: bool = False
+    member_name_grammar: Literal["strict", "permissive-wheel"] = "strict"
 
     def __post_init__(self) -> None:
-        if type(self.allow_member_spaces) is not bool:
-            raise ContractError("allow_member_spaces must be boolean")
+        if type(self.member_name_grammar) is not str or self.member_name_grammar not in (
+            "strict",
+            "permissive-wheel",
+        ):
+            raise ContractError("unknown member_name_grammar")
         ceilings = (2 * 1024**3, 8 * 1024**3, 100000, 128 * 1024 * 1024, 3600)
         for field, ceiling in zip(fields(self), ceilings):
             value = getattr(self, field.name)

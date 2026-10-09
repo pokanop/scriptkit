@@ -48,7 +48,7 @@ policy = ArtifactPolicy(
     max_entries=50_000,
     max_expansion_ratio=2_000,
     command_timeout=1_800,
-    allow_member_spaces=True,  # required for locks containing setuptools
+    member_name_grammar="permissive-wheel",  # required for setuptools locks
 )
 resolver = Resolver(store, cache, policy=policy, artifact_directory=artifact_dir)
 source = RegistryArtifactSource(
@@ -64,22 +64,47 @@ backends retain ownership of their timeout configuration; use
 `PipBackend(timeout=policy.command_timeout)` or
 `UvBackend(executable, timeout=policy.command_timeout)`.
 
-## Opt-in archive member spaces
+## Archive member-name grammars and threat model
 
-`allow_member_spaces` is a strict boolean, default `False`. Existing callers
-continue to reject all spaced members. Locks containing setuptools require this
-opt-in for `setuptools/launcher manifest.xml`. It permits only a single U+0020
-between two already-allowed characters in the same segment. Leading/trailing or
-consecutive spaces, spaces next to `/`, other whitespace and controls still
-reject. Reserved-device prefixes before the first space or dot also reject
-(case-insensitively: CON, PRN, AUX, NUL, COM0–9 and LPT0–9).
+`member_name_grammar` accepts exactly two strings (no boolean or other values):
 
-This is archive-member-only: catalog artifact paths and registry URLs retain the
-unchanged `INVENTORY_PATH` grammar. Names are validated, never rewritten on disk;
-case-collision, traversal, mode, encryption and compression checks are unchanged.
-Spaces remain off by default to preserve existing trust assumptions and portable
-filename restrictions. The additive API golden records the new keyword; release
-still requires a minor bump, outside this change.
+- **`strict` (default):** the existing `INVENTORY_PATH` grammar. Segments start
+  with ASCII alphanumeric or underscore; subsequent characters may also contain
+  `.`, `+`, `@`, `-`, but not a trailing dot. Device names are forbidden. No
+  spaces, parentheses or leading dots. Defaults stay conservative and preserve
+  existing trust assumptions.
+- **`permissive-wheel` (explicit opt-in):** segments use printable ASCII
+  U+0020–U+007E, subject to the denylist below. Leading dots, parentheses,
+  brackets, braces, `+`, `,`, `=`, `!`, `#`, `%`, `'`, `^`, `@` are admitted.
+  Setuptools locks require this grammar for its launcher manifest, development
+  script template and vendored `.lock` file. This replaces the unreleased
+  spaces-only proposal, not a previously released API.
+
+| Denied | Reason |
+|---|---|
+| Backslash | Windows separator / alternate traversal spelling |
+| Colon | Windows drive prefixes and alternate data streams |
+| `*`, `?` | Windows reserved characters and shell glob patterns |
+| Double quote | Windows reserved character and shell quoting |
+| `<`, `>` | Windows reserved characters and shell redirection |
+| Pipe | Windows reserved character and shell pipeline |
+| Backtick, `$` | Shell command/variable substitution |
+| `;`, `&` | Shell command chaining / background execution |
+| Controls and all non-ASCII | Control injection and cross-platform normalization ambiguity |
+| Empty segments, `.` or `..` | Absolute paths, duplicate separators, traversal |
+| Leading space, trailing space/dot | Ambiguous display and Windows filename normalization |
+| Leading `-` or `~` | Option injection and home-directory expansion |
+| Consecutive spaces | Ambiguous whitespace spelling |
+| CON, PRN, AUX, NUL, COM0–9, LPT0–9 before first space/dot | Windows device aliases, case-insensitively |
+
+Paths remain relative POSIX paths with `/` separators. A single final `/` is
+allowed as a directory marker, not an empty path segment. Catalog artifact paths
+and registry URLs retain the unchanged `INVENTORY_PATH` grammar. Names are
+validated, never rewritten on disk; case-collision, traversal, mode, encryption
+and compression checks remain enforced. This grammar is **not** shell escaping:
+consumers must continue to pass arguments as arrays, never interpolate names into
+shell commands. The additive API golden records the new keyword; release still
+requires a minor bump, outside this change.
 
 ## Threat model and residual bounds
 
@@ -88,7 +113,9 @@ one at a time into an inactive, private generation before any extraction or
 backend execution. Full CRC validation uses 1 MiB reads. Traversal, links,
 encryption, malformed ZIPs, case collisions, file/directory collisions and
 unsupported compression continue to reject. Wheel identity metadata is bounded
-at 1 MiB. Inventory and receipt verification hash files incrementally too.
+at 1 MiB. Only top-level `.dist-info/METADATA` identifies the installed wheel;
+nested vendored distributions cannot supply or override its identity. Inventory
+and receipt verification hash files incrementally too.
 Generation failures never activate; retained failed generations need explicit
 administrative cleanup. Disk budgets are per artifact, not aggregate quotas.
 Private roots must not be writable by another principal (Windows users must
@@ -122,9 +149,9 @@ printing manager-process and backend/smoke-child peak RSS separately on Linux.
 `--prepared-torch` reuses a directory of already downloaded wheels without
 mixing pip download memory into manager measurements.
 
-Remaining limitation: the precise space opt-in admits setuptools' launcher
-manifest, but setuptools 84.0.0 also contains `setuptools/script (dev).tmpl` and
-`setuptools/_vendor/.lock`. Parentheses and leading dots remain outside the
-existing segment grammar. Versions 77.0.3 and 80.9.0 also contain the parenthesized
-member. Full real-dependency installation still rejects; the space opt-in does
-not implicitly authorize these additional names.
+Before any install, the probe scans every wheel member and writes
+`member-scan.json`: counts admitted only by the opt-in, grouped by grammar rule,
+and every still-rejected name. A rejection stops the probe rather than widening
+the grammar. The complete real Torch set has passed full manager installation
+with the permissive grammar; retain the scan, immutable catalog, output and RSS
+measurements as evidence.

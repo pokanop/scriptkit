@@ -15,25 +15,27 @@ from scriptkit.contracts.codec import ContractError
 from scriptkit.contracts.models import INVENTORY_PATH
 
 
-def _safe_member_name(name: str, *, allow_spaces: bool) -> bool:
-    if not allow_spaces or " " not in name:
+def _safe_member_name(name: str, *, grammar: str) -> bool:
+    if grammar == "strict":
         return re.fullmatch(INVENTORY_PATH, name) is not None
-    # Reuse the existing grammar without widening catalog or transport paths.
-    # Spaces must have an allowed non-space character on both sides, within
-    # one segment. Normalization is validation-only; archive names stay intact.
-    for index, char in enumerate(name):
-        if char == " " and (
-            index == 0
-            or index == len(name) - 1
-            or re.fullmatch(r"[A-Za-z0-9_.+@-]", name[index - 1]) is None
-            or re.fullmatch(r"[A-Za-z0-9_.+@-]", name[index + 1]) is None
+    if grammar != "permissive-wheel":
+        return False
+    # Archive-only grammar: no normalization or widening of catalog/URL paths.
+    if any(not 0x20 <= ord(char) <= 0x7E or char in r'\:*?"<>|`$;&' for char in name):
+        return False
+    for segment in name.split("/"):
+        if (
+            not segment
+            or segment in (".", "..")
+            or segment.startswith((" ", "-", "~"))
+            or segment.endswith((" ", "."))
+            or "  " in segment
         ):
             return False
-    for segment in name.split("/"):
         prefix = re.split(r"[ .]", segment, maxsplit=1)[0]
         if re.fullmatch(r"CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9]", prefix, re.IGNORECASE):
             return False
-    return re.fullmatch(INVENTORY_PATH, name.replace(" ", "_")) is not None
+    return True
 
 
 def validate_archive(
@@ -64,12 +66,12 @@ def validate_archive(
             files: set[str] = set()
             total = 0
             for item in infos:
-                name = item.filename.rstrip("/") if item.is_dir() else item.filename
+                name = item.filename.removesuffix("/") if item.is_dir() else item.filename
                 folded = name.casefold()
                 mode = item.external_attr >> 16
                 if (
                     item.orig_filename != item.filename
-                    or not _safe_member_name(name, allow_spaces=budget.allow_member_spaces)
+                    or not _safe_member_name(name, grammar=budget.member_name_grammar)
                     or folded in seen
                     or stat.S_IFMT(mode) not in (0, stat.S_IFREG, stat.S_IFDIR)
                     or item.flag_bits & 1

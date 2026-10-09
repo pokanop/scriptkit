@@ -53,10 +53,18 @@ def test_rejections(entries, policy, match, tmp_path):
         validate_archive(path.name, path, policy=policy)
 
 
-def test_member_spaces_are_explicit():
+@pytest.mark.parametrize(
+    "name",
+    [
+        "setuptools/launcher manifest.xml",
+        "setuptools/script (dev).tmpl",
+        "setuptools/_vendor/.lock",
+    ],
+)
+def test_member_grammar_is_explicit(name):
     raw = bundle(
         [
-            ("setuptools/launcher manifest.xml", "payload"),
+            (name, "payload"),
             ("setuptools-1.0.dist-info/WHEEL", "Wheel-Version: 1.0"),
         ]
     )
@@ -64,11 +72,17 @@ def test_member_spaces_are_explicit():
         with pytest.raises(ContractError, match="unsafe"):
             validate_archive("setuptools.whl", raw, policy=policy)
     assert (
-        validate_archive("setuptools.whl", raw, policy=ArtifactPolicy(allow_member_spaces=True))
+        validate_archive(
+            "setuptools.whl", raw, policy=ArtifactPolicy(member_name_grammar="permissive-wheel")
+        )
         == "wheel"
     )
-    with pytest.raises(ContractError, match="boolean"):
-        ArtifactPolicy(allow_member_spaces=1)
+
+
+@pytest.mark.parametrize("value", [True, False, 1, None, "unknown", "PERMISSIVE-WHEEL"])
+def test_invalid_member_grammar(value):
+    with pytest.raises(ContractError, match="member_name_grammar"):
+        ArtifactPolicy(member_name_grammar=value)
 
 
 @pytest.mark.parametrize(
@@ -86,8 +100,15 @@ def test_member_spaces_are_explicit():
         "newline\nname.py",
         "nul\x00name.py",
         "dir/../name.py",
-        "dir/script (dev).py",
-        "dir/.lock",
+        "dir/./name.py",
+        "dir//name.py",
+        "/absolute.py",
+        "dir//",
+        "dir/-option.py",
+        "dir/~user.py",
+        "dir/ends.",
+        *[f"dir/a{char}b.py" for char in r'\:*?"<>|`$;&'],
+        "del\x7fname.py",
         *[
             f"dir/{device}{suffix}"
             for device in (
@@ -103,16 +124,44 @@ def test_member_spaces_are_explicit():
     ],
 )
 def test_opt_in_rejects_unsafe_member_names(name):
-    raw = bundle([(name, "payload")])
+    # Windows ZipInfo's writer normalizes backslashes to slashes. Patch the
+    # same-length local/central names so the fixture tests actual hostile bytes.
+    stored_name = name.replace("\\", "Z")
+    raw = bundle([(stored_name, "payload")])
+    raw = raw.replace(stored_name.encode(), name.encode())
     with pytest.raises(ContractError, match="unsafe"):
-        validate_archive("bad.scripts.zip", raw, policy=ArtifactPolicy(allow_member_spaces=True))
+        validate_archive(
+            "bad.scripts.zip", raw, policy=ArtifactPolicy(member_name_grammar="permissive-wheel")
+        )
 
 
-def test_space_opt_in_keeps_collisions_and_catalog_paths_rejected():
+@pytest.mark.parametrize(
+    "name", [".lock", "(file)", "[file]", "{file}", *[f"a{char}b" for char in "+,=!#%' ^@"]]
+)
+def test_permissive_ascii_acceptance(name):
+    raw = bundle([(name + ".py", "payload")])
+    assert (
+        validate_archive(
+            "ok.scripts.zip", raw, policy=ArtifactPolicy(member_name_grammar="permissive-wheel")
+        )
+        == "legacy-scripts"
+    )
+
+
+@pytest.mark.parametrize("char", [*[chr(i) for i in range(32)], chr(127), "é", "\u00a0", "\u2003"])
+def test_permissive_controls_and_non_ascii(char):
+    # Direct grammar check avoids ZipFile's writer truncating NUL names.
+    from scriptkit.contracts.archives import _safe_member_name
+
+    assert not _safe_member_name(f"a{char}b", grammar="permissive-wheel")
+    assert not _safe_member_name("valid.py", grammar="unknown")
+
+
+def test_grammar_opt_in_keeps_collisions_and_catalog_paths_rejected():
     from scriptkit.contracts.models import Artifact
     from scriptkit.registry.cache import HTTPTransport
 
-    policy = ArtifactPolicy(allow_member_spaces=True)
+    policy = ArtifactPolicy(member_name_grammar="permissive-wheel")
     with pytest.raises(ContractError, match="unsafe"):
         validate_archive(
             "bad.scripts.zip", bundle([("some file.py", "x"), ("Some File.py", "y")]), policy=policy

@@ -22,7 +22,13 @@ def verify_locks(
                 raise ValueError("Python dependencies must be wheels")
             raw = artifacts[package.artifact]
             with zipfile.ZipFile(io.BytesIO(raw) if isinstance(raw, bytes) else raw) as archive:
-                entries = [p for p in archive.namelist() if p.endswith(".dist-info/METADATA")]
+                # Vendored distributions may have their own nested dist-info.
+                # Only top-level metadata identifies the wheel being installed.
+                entries = [
+                    p
+                    for p in archive.namelist()
+                    if p.count("/") == 1 and p.endswith(".dist-info/METADATA")
+                ]
                 if len(entries) != 1:
                     raise ValueError("wheel must contain one distribution metadata file")
                 with archive.open(entries[0]) as stream:

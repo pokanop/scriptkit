@@ -36,7 +36,7 @@ POLICY = ArtifactPolicy(
     max_entries=50000,
     max_expansion_ratio=2000,
     command_timeout=1800,
-    allow_member_spaces=True,
+    member_name_grammar="permissive-wheel",
 )
 
 
@@ -71,7 +71,48 @@ def synthetic(root: Path, *, large: bool = True, torch: bool = False) -> Path:
     return path
 
 
+def scan_members(root: Path, wheels: list[Path]) -> None:
+    from collections import Counter
+    from scriptkit.contracts.archives import _safe_member_name
+
+    groups: Counter[str] = Counter()
+    admitted = []
+    rejected = []
+    total = 0
+    for path in wheels:
+        with zipfile.ZipFile(path) as archive:
+            for info in archive.infolist():
+                total += 1
+                name = info.filename.removesuffix("/") if info.is_dir() else info.filename
+                if not _safe_member_name(name, grammar="permissive-wheel"):
+                    rejected.append({"wheel": path.name, "member": name})
+                elif not _safe_member_name(name, grammar="strict"):
+                    reasons = []
+                    if " " in name:
+                        reasons.append("interior space")
+                    if any(part.startswith(".") for part in name.split("/")):
+                        reasons.append("leading dot")
+                    if "(" in name or ")" in name:
+                        reasons.append("parentheses")
+                    reason = " + ".join(reasons) or "other newly allowed ASCII"
+                    groups[reason] += 1
+                    admitted.append({"wheel": path.name, "member": name, "rule": reason})
+    report = {
+        "wheels": len(wheels),
+        "members": total,
+        "opt_in_only": len(admitted),
+        "groups": dict(groups),
+        "admitted": admitted,
+        "rejected": rejected,
+    }
+    (root / "member-scan.json").write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps(report), flush=True)
+    if rejected:
+        raise RuntimeError("real member scan rejected entries; do not widen grammar")
+
+
 def exercise(root: Path, wheels: list[Path], *, smoke_module: str = "probe") -> Path:
+    scan_members(root, wheels)
     directory = root / "artifacts"
     directory.mkdir()
     items = []
