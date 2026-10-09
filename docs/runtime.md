@@ -47,9 +47,9 @@ From this repository, with a Python 3.11+ virtual environment activated:
 ```sh
 python -m pip install '.[dev]'
 python -m build
-python -m pip install dist/pokanop_scriptkit-1.4.0-py3-none-any.whl
+python -m pip install dist/pokanop_scriptkit-1.5.0-py3-none-any.whl
 # Optional: install the wheel's declared Rich extra instead.
-python -m pip install 'dist/pokanop_scriptkit-1.4.0-py3-none-any.whl[rich]'
+python -m pip install 'dist/pokanop_scriptkit-1.5.0-py3-none-any.whl[rich]'
 ```
 
 Tools then use `import scriptkit as sk` from any working directory. Do not
@@ -293,8 +293,8 @@ python -m pip install -e '.[dev,rich]'
 python -m pytest
 python -m mypy
 python -m build
-python tools/check_artifact.py dist/pokanop_scriptkit-1.4.0-py3-none-any.whl
-python tools/check_artifact.py dist/pokanop_scriptkit-1.4.0-py3-none-any.whl --rich
+python tools/check_artifact.py dist/pokanop_scriptkit-1.5.0-py3-none-any.whl
+python tools/check_artifact.py dist/pokanop_scriptkit-1.5.0-py3-none-any.whl --rich
 ```
 
 - `tests/test_{app,blocks,cli,cli_progress_tables,config,console,doctor,proc,style,text}.py`

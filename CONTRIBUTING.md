@@ -7,8 +7,8 @@ python -m pip install -e '.[dev,rich]'
 python -m pytest
 python -m mypy
 python -m build
-python tools/check_artifact.py dist/pokanop_scriptkit-1.4.0-py3-none-any.whl
-python tools/check_artifact.py dist/pokanop_scriptkit-1.4.0-py3-none-any.whl --rich
+python tools/check_artifact.py dist/pokanop_scriptkit-1.5.0-py3-none-any.whl
+python tools/check_artifact.py dist/pokanop_scriptkit-1.5.0-py3-none-any.whl --rich
 ```
 
 Build tooling/test dependencies need package-index access; runtime smoke operations

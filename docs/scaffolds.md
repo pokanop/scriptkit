@@ -41,7 +41,7 @@ wheel-installable; extension-less launchers are a source-checkout convenience.
 `--layout repository` when regenerating an existing repository layout.
 
 **Pre-release caveat:** the public runtime-only 1.3.0 wheel does not contain these
-new APIs. The prepared framework version is 1.4.0. Until its verified artifacts
+new APIs. The prepared framework version is 1.5.0. Until its verified artifacts
 are published, use the locally built framework wheel alongside generated wheels
 (`pip install --no-index framework.whl tool.whl`). Do not publish generated
 projects pointing to the old public wheel. No existing release is overwritten.

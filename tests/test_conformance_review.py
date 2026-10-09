@@ -35,10 +35,10 @@ def test_add_dependency_keeps_manifest_and_generator_conflict(project):
         ("An offline example", "different description"),
         ("setuptools>=68", "setuptools>=70"),
         ("setuptools.build_meta", "custom.backend"),
-        ("pokanop-scriptkit==1.4.0", "pokanop-scriptkit>=1.4.0"),
+        ("pokanop-scriptkit==1.5.0", "pokanop-scriptkit>=1.5.0"),
         ("dependencies = [", 'dependencies = ["pokanop-scriptkit>=1", '),
-        ('dependencies = ["pokanop-scriptkit==1.4.0"]', "dependencies = []"),
-        ('dependencies = ["pokanop-scriptkit==1.4.0"]', "dependencies = 1"),
+        ('dependencies = ["pokanop-scriptkit==1.5.0"]', "dependencies = []"),
+        ('dependencies = ["pokanop-scriptkit==1.5.0"]', "dependencies = 1"),
         ('where = ["src"]', 'where = ["other"]'),
     ],
 )

@@ -278,7 +278,7 @@ def test_generated_installer_installs_only_manager(tmp_path, built_wheel, releas
         sha256(bootstrap_path.read_bytes()),
         url + built_wheel.name,
         sha256(built_wheel.read_bytes()),
-        "1.4.0",
+        "1.5.0",
     )
     for name, content in pins.items():
         (tmp_path / name).write_bytes(content)

@@ -254,7 +254,7 @@ def test_real_manager_install_repair_and_tool(tmp_path, built_wheel):
     raw = built_wheel.read_bytes()
     service = b.Manager(root, download=lambda _: raw)
     first = service.install(
-        "https://example.org/pinned.whl", hashlib.sha256(raw).hexdigest(), "1.4.0"
+        "https://example.org/pinned.whl", hashlib.sha256(raw).hexdigest(), "1.5.0"
     )
     assert not (root / "tools").exists()
     command = root / "bin" / ("scriptkit.cmd" if os.name == "nt" else "scriptkit")
@@ -303,7 +303,7 @@ def test_real_manager_install_repair_and_tool(tmp_path, built_wheel):
         else:
             assert broken.stdout == ""
     assert subprocess.check_output([str(tool)], text=True).strip() == "working"
-    service.install("https://example.org/pinned.whl", hashlib.sha256(raw).hexdigest(), "1.4.0")
+    service.install("https://example.org/pinned.whl", hashlib.sha256(raw).hexdigest(), "1.5.0")
     assert json.loads(cli("doctor").stdout)["ok"]
     cli("uninstall", "hello")
     assert not tool.exists()
