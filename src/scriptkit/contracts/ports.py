@@ -8,7 +8,7 @@ All filesystem paths are relative to an adapter-owned, confined root.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from .catalog import ResolvedPlan
 
@@ -31,6 +31,19 @@ class InstallationSource(Protocol):
         ...
 
     def fetch(self, artifact: Artifact) -> bytes: ...
+
+
+@runtime_checkable
+class StreamingInstallationSource(InstallationSource, Protocol):
+    """Optional additive extension; legacy byte-returning sources stay valid."""
+
+    def fetch_into(self, artifact: Artifact, destination: Path) -> None:
+        """Write bounded, verified bytes to a fresh caller-owned private path.
+
+        Reject size/hash mismatches; never write more than the declared size.
+        The installer independently verifies the completed private copy.
+        """
+        ...
 
 
 class EnvironmentBackend(Protocol):

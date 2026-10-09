@@ -18,6 +18,8 @@ sentinels). Invalid declarations raise `ContractError`. The default ratio is
 intentionally redundant with the historic expanded-byte bound: introducing a
 small ratio default would reject formerly accepted highly compressible scripts.
 Large-artifact consumers should explicitly tighten it (the probe uses 2,000).
+The ratio ceiling is a compatibility cap, not a reachable DEFLATE threshold;
+expanded-byte limits and an explicitly lower ratio provide the useful bounds.
 Omitting `policy` preserves the registry's 64 MiB transport cap and the
 validator's 128 MiB/10,000-entry limits, without imposing a new compressed-size
 limit on existing injected byte sources. Passing `ArtifactPolicy()` explicitly
@@ -98,7 +100,10 @@ backends retain ownership of their timeout configuration; use
 | CON, PRN, AUX, NUL, COM0–9, LPT0–9 before first space/dot | Windows device aliases, case-insensitively |
 
 Paths remain relative POSIX paths with `/` separators. A single final `/` is
-allowed as a directory marker, not an empty path segment. Catalog artifact paths
+allowed as a directory marker, not an empty path segment. This deliberately
+tightens one historical strict-default edge case: `dir//` directory entries
+were previously accepted after stripping every trailing slash; they now reject.
+Catalog artifact paths
 and registry URLs retain the unchanged `INVENTORY_PATH` grammar. Names are
 validated, never rewritten on disk; case-collision, traversal, mode, encryption
 and compression checks remain enforced. This grammar is **not** shell escaping:
@@ -113,8 +118,10 @@ one at a time into an inactive, private generation before any extraction or
 backend execution. Full CRC validation uses 1 MiB reads. Traversal, links,
 encryption, malformed ZIPs, case collisions, file/directory collisions and
 unsupported compression continue to reject. Wheel identity metadata is bounded
-at 1 MiB. Only top-level `.dist-info/METADATA` identifies the installed wheel;
-nested vendored distributions cannot supply or override its identity. Inventory
+at 1 MiB. Lock verification counts both top-level `.dist-info/METADATA` and
+`<dist>.data/{purelib,platlib}/<x>.dist-info/METADATA`, which pip relocates to the
+site-packages root. Exactly one installed distribution identity is permitted;
+nested vendored metadata that stays nested cannot override it. Inventory
 and receipt verification hash files incrementally too.
 Generation failures never activate; retained failed generations need explicit
 administrative cleanup. Disk budgets are per artifact, not aggregate quotas.
@@ -123,8 +130,11 @@ also provide appropriate ACLs). Policy limits do not sandbox malicious Python
 code in an explicitly trusted package.
 
 Old `fetch() -> bytes` sources remain compatible, but may materialize one entire
-artifact. Large sources must provide `fetch_into(artifact, destination)` and
-bound their writes; source adapters are trusted injected code, not an adversarial
+artifact. Large sources implement the optional
+`scriptkit.contracts.ports.StreamingInstallationSource` protocol, extending
+`InstallationSource` with `fetch_into(artifact, destination)` and bounded writes.
+The installer detects this additive protocol; byte-only sources remain valid.
+Source adapters are trusted injected code, not an adversarial
 plugin boundary. The manager independently rechecks the staged bytes.
 
 ## Verification

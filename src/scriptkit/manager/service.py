@@ -19,7 +19,7 @@ from scriptkit.contracts.artifacts import ArtifactPolicy, DEFAULT_ARTIFACT_POLIC
 from scriptkit.contracts.models import NAME
 from scriptkit.contracts.archives import validate_archive
 from scriptkit.contracts.catalog import ResolvedPlan
-from scriptkit.contracts.ports import InstallationSource
+from scriptkit.contracts.ports import InstallationSource, StreamingInstallationSource
 from scriptkit.state import StateConflict
 
 from . import launchers, storage
@@ -182,9 +182,8 @@ class Installer:
                     raise ValueError("artifact exceeds download policy")
                 path = wheel_dir / artifact.path
                 path.parent.mkdir(parents=True, exist_ok=True)
-                fetch_into = getattr(self.source, "fetch_into", None)
-                if fetch_into is not None:
-                    fetch_into(artifact, path)
+                if isinstance(self.source, StreamingInstallationSource):
+                    self.source.fetch_into(artifact, path)
                 else:
                     # Compatibility for existing byte sources: only one artifact
                     # is resident, never the entire dependency set.

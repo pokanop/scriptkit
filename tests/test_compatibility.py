@@ -23,6 +23,7 @@ def test_public_exports_and_signatures():
 
 def test_additive_artifact_policy_api():
     from scriptkit.contracts import ArtifactPolicy
+    from scriptkit.contracts.ports import StreamingInstallationSource
     from scriptkit.manager import Installer
     from scriptkit.registry import Resolver
     from scriptkit.registry.source import RegistryArtifactSource
@@ -30,12 +31,16 @@ def test_additive_artifact_policy_api():
     import re
 
     golden = json.loads(Path(__file__).with_name("public_api_artifact_policy.json").read_text())
-    assert {
+    actual = {
         cls.__name__: re.sub(r" at 0x[0-9a-fA-F]+", "", str(inspect.signature(cls))).replace(
             "pathlib._local.Path", "pathlib.Path"
         )
         for cls in (ArtifactPolicy, Installer, Resolver, RegistryArtifactSource)
-    } == golden
+    }
+    actual["StreamingInstallationSource.fetch_into"] = str(
+        inspect.signature(StreamingInstallationSource.fetch_into)
+    )
+    assert actual == golden
 
 
 @pytest.mark.parametrize(

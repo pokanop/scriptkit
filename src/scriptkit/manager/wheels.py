@@ -22,12 +22,15 @@ def verify_locks(
                 raise ValueError("Python dependencies must be wheels")
             raw = artifacts[package.artifact]
             with zipfile.ZipFile(io.BytesIO(raw) if isinstance(raw, bytes) else raw) as archive:
-                # Vendored distributions may have their own nested dist-info.
-                # Only top-level metadata identifies the wheel being installed.
+                # Count metadata installed at site-packages root, including
+                # pip's .data/{purelib,platlib} relocation. Nested _vendor
+                # metadata stays nested and does not register a distribution.
                 entries = [
                     p
                     for p in archive.namelist()
-                    if p.count("/") == 1 and p.endswith(".dist-info/METADATA")
+                    if re.fullmatch(
+                        r"(?:[^/]+\.data/(?:purelib|platlib)/)?[^/]+\.dist-info/METADATA", p
+                    )
                 ]
                 if len(entries) != 1:
                     raise ValueError("wheel must contain one distribution metadata file")

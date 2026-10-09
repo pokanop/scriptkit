@@ -98,7 +98,7 @@ def test_invalid_member_grammar(value):
         "unicode\u2003name.py",
         "control\x01name.py",
         "newline\nname.py",
-        "nul\x00name.py",
+        "safe\x00name.py",
         "dir/../name.py",
         "dir/./name.py",
         "dir//name.py",
@@ -126,9 +126,14 @@ def test_invalid_member_grammar(value):
 def test_opt_in_rejects_unsafe_member_names(name):
     # Windows ZipInfo's writer normalizes backslashes to slashes. Patch the
     # same-length local/central names so the fixture tests actual hostile bytes.
-    stored_name = name.replace("\\", "Z")
+    stored_name = name.replace("\\", "Z").replace("\x00", "Z")
     raw = bundle([(stored_name, "payload")])
     raw = raw.replace(stored_name.encode(), name.encode())
+    if "\x00" in name:
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            info = archive.infolist()[0]
+            assert info.filename == "safe"
+            assert info.orig_filename == name
     with pytest.raises(ContractError, match="unsafe"):
         validate_archive(
             "bad.scripts.zip", raw, policy=ArtifactPolicy(member_name_grammar="permissive-wheel")
@@ -155,6 +160,15 @@ def test_permissive_controls_and_non_ascii(char):
 
     assert not _safe_member_name(f"a{char}b", grammar="permissive-wheel")
     assert not _safe_member_name("valid.py", grammar="unknown")
+
+
+@pytest.mark.parametrize(
+    "policy", [None, ArtifactPolicy(), ArtifactPolicy(member_name_grammar="permissive-wheel")]
+)
+def test_repeated_directory_separator_is_rejected(policy):
+    raw = bundle([("dir//", "")])
+    with pytest.raises(ContractError, match="unsafe"):
+        validate_archive("bad.scripts.zip", raw, policy=policy)
 
 
 def test_grammar_opt_in_keeps_collisions_and_catalog_paths_rejected():

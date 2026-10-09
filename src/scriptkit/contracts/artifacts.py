@@ -1,6 +1,6 @@
 """Explicit finite resource budgets for untrusted installation artifacts."""
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from typing import Literal
 
 from .codec import ContractError
@@ -27,11 +27,17 @@ class ArtifactPolicy:
             "permissive-wheel",
         ):
             raise ContractError("unknown member_name_grammar")
-        ceilings = (2 * 1024**3, 8 * 1024**3, 100000, 128 * 1024 * 1024, 3600)
-        for field, ceiling in zip(fields(self), ceilings):
-            value = getattr(self, field.name)
+        ceilings = {
+            "max_archive_bytes": 2 * 1024**3,
+            "max_expanded_bytes": 8 * 1024**3,
+            "max_entries": 100000,
+            "max_expansion_ratio": 128 * 1024 * 1024,
+            "command_timeout": 3600,
+        }
+        for name, ceiling in ceilings.items():
+            value = getattr(self, name)
             if type(value) is not int or not 1 <= value <= ceiling:
-                raise ContractError(f"{field.name} outside finite artifact policy ceiling")
+                raise ContractError(f"{name} outside finite artifact policy ceiling")
 
 
 DEFAULT_ARTIFACT_POLICY = ArtifactPolicy()
