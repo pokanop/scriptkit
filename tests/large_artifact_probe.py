@@ -36,6 +36,7 @@ POLICY = ArtifactPolicy(
     max_entries=50000,
     max_expansion_ratio=2000,
     command_timeout=1800,
+    allow_member_spaces=True,
 )
 
 
@@ -163,6 +164,19 @@ def exercise(root: Path, wheels: list[Path], *, smoke_module: str = "probe") -> 
             }
         )
     )
+    if sys.platform == "linux":
+        import resource
+
+        print(
+            json.dumps(
+                {
+                    "manager_peak_rss_KiB": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+                    "backend_and_smoke_peak_rss_KiB": resource.getrusage(
+                        resource.RUSAGE_CHILDREN
+                    ).ru_maxrss,
+                }
+            )
+        )
     return receipt
 
 
@@ -170,8 +184,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument("directory", type=Path)
     parser.add_argument("--torch", action="store_true")
+    parser.add_argument(
+        "--prepared-torch",
+        action="store_true",
+        help="install already downloaded wheels in an existing directory",
+    )
     args = parser.parse_args()
-    args.directory.mkdir(parents=True, exist_ok=False)
+    if not args.prepared_torch:
+        args.directory.mkdir(parents=True, exist_ok=False)
     wheels = []
     if args.torch:
         subprocess.run(
@@ -189,10 +209,18 @@ def main() -> None:
             ],
             check=True,
         )
+        # A fresh interpreter separates manager RSS from pip download RSS.
+        subprocess.run(
+            [sys.executable, __file__, str(args.directory), "--prepared-torch"], check=True
+        )
+        return
+    if args.prepared_torch:
         wheels = list(args.directory.glob("*.whl"))
         if not any(p.name == TORCH_NAME for p in wheels):
             raise RuntimeError("run on Linux x86_64 CPython 3.13 for the exact target wheel")
-    wheels.append(synthetic(args.directory, large=not args.torch, torch=args.torch))
+    wheels.append(
+        synthetic(args.directory, large=not args.prepared_torch, torch=args.prepared_torch)
+    )
     exercise(args.directory, wheels)
 
 

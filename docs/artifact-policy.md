@@ -48,6 +48,7 @@ policy = ArtifactPolicy(
     max_entries=50_000,
     max_expansion_ratio=2_000,
     command_timeout=1_800,
+    allow_member_spaces=True,  # required for locks containing setuptools
 )
 resolver = Resolver(store, cache, policy=policy, artifact_directory=artifact_dir)
 source = RegistryArtifactSource(
@@ -62,6 +63,23 @@ The default pip backend and smoke command use the policy timeout. Injected
 backends retain ownership of their timeout configuration; use
 `PipBackend(timeout=policy.command_timeout)` or
 `UvBackend(executable, timeout=policy.command_timeout)`.
+
+## Opt-in archive member spaces
+
+`allow_member_spaces` is a strict boolean, default `False`. Existing callers
+continue to reject all spaced members. Locks containing setuptools require this
+opt-in for `setuptools/launcher manifest.xml`. It permits only a single U+0020
+between two already-allowed characters in the same segment. Leading/trailing or
+consecutive spaces, spaces next to `/`, other whitespace and controls still
+reject. Reserved-device prefixes before the first space or dot also reject
+(case-insensitively: CON, PRN, AUX, NUL, COM0–9 and LPT0–9).
+
+This is archive-member-only: catalog artifact paths and registry URLs retain the
+unchanged `INVENTORY_PATH` grammar. Names are validated, never rewritten on disk;
+case-collision, traversal, mode, encryption and compression checks are unchanged.
+Spaces remain off by default to preserve existing trust assumptions and portable
+filename restrictions. The additive API golden records the new keyword; release
+still requires a minor bump, outside this change.
 
 ## Threat model and residual bounds
 
@@ -99,8 +117,14 @@ complete catalog with immutable transitive wheel hashes, and imports Torch in
 the smoke command. Dependency discovery happens only in the evidence setup,
 never in the manager. The catalog/logs should be retained with the run.
 
-Current limitation discovered by that probe: PyPI's setuptools 84.0.0 dependency
-contains `setuptools/launcher manifest.xml`, rejected by the existing archive
-member grammar. The exact Torch wheel passes bounded validation, but the complete
-real dependency installation remains blocked on that pre-existing rejection.
-This policy change deliberately does not silently relax that security boundary.
+The probe runs manager installation in a fresh interpreter after downloading,
+printing manager-process and backend/smoke-child peak RSS separately on Linux.
+`--prepared-torch` reuses a directory of already downloaded wheels without
+mixing pip download memory into manager measurements.
+
+Remaining limitation: the precise space opt-in admits setuptools' launcher
+manifest, but setuptools 84.0.0 also contains `setuptools/script (dev).tmpl` and
+`setuptools/_vendor/.lock`. Parentheses and leading dots remain outside the
+existing segment grammar. Versions 77.0.3 and 80.9.0 also contain the parenthesized
+member. Full real-dependency installation still rejects; the space opt-in does
+not implicitly authorize these additional names.

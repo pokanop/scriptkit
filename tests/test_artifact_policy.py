@@ -53,6 +53,76 @@ def test_rejections(entries, policy, match, tmp_path):
         validate_archive(path.name, path, policy=policy)
 
 
+def test_member_spaces_are_explicit():
+    raw = bundle(
+        [
+            ("setuptools/launcher manifest.xml", "payload"),
+            ("setuptools-1.0.dist-info/WHEEL", "Wheel-Version: 1.0"),
+        ]
+    )
+    for policy in (None, ArtifactPolicy()):
+        with pytest.raises(ContractError, match="unsafe"):
+            validate_archive("setuptools.whl", raw, policy=policy)
+    assert (
+        validate_archive("setuptools.whl", raw, policy=ArtifactPolicy(allow_member_spaces=True))
+        == "wheel"
+    )
+    with pytest.raises(ContractError, match="boolean"):
+        ArtifactPolicy(allow_member_spaces=1)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        " leading.py",
+        "trailing.py ",
+        "two  spaces.py",
+        "dir/ leading.py",
+        "dir /file.py",
+        "tab\tname.py",
+        "nbsp\u00a0name.py",
+        "unicode\u2003name.py",
+        "control\x01name.py",
+        "newline\nname.py",
+        "nul\x00name.py",
+        "dir/../name.py",
+        "dir/script (dev).py",
+        "dir/.lock",
+        *[
+            f"dir/{device}{suffix}"
+            for device in (
+                "CON",
+                "prn",
+                "Aux",
+                "NUL",
+                *[f"COM{i}" for i in range(10)],
+                *[f"LPT{i}" for i in range(10)],
+            )
+            for suffix in (" name.py", ".txt name.py")
+        ],
+    ],
+)
+def test_opt_in_rejects_unsafe_member_names(name):
+    raw = bundle([(name, "payload")])
+    with pytest.raises(ContractError, match="unsafe"):
+        validate_archive("bad.scripts.zip", raw, policy=ArtifactPolicy(allow_member_spaces=True))
+
+
+def test_space_opt_in_keeps_collisions_and_catalog_paths_rejected():
+    from scriptkit.contracts.models import Artifact
+    from scriptkit.registry.cache import HTTPTransport
+
+    policy = ArtifactPolicy(allow_member_spaces=True)
+    with pytest.raises(ContractError, match="unsafe"):
+        validate_archive(
+            "bad.scripts.zip", bundle([("some file.py", "x"), ("Some File.py", "y")]), policy=policy
+        )
+    with pytest.raises(ContractError):
+        Artifact.from_json('{"path":"some file.whl","sha256":"' + "0" * 64 + '","size":1}')
+    with pytest.raises(ContractError, match="unsafe"):
+        HTTPTransport().fetch("https://example.com/some file.whl", 100)
+
+
 def test_malformed_and_crc(tmp_path):
     with pytest.raises(ContractError, match="invalid archive"):
         validate_archive("bad.whl", b"not zip", policy=ArtifactPolicy())

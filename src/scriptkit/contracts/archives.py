@@ -15,6 +15,27 @@ from scriptkit.contracts.codec import ContractError
 from scriptkit.contracts.models import INVENTORY_PATH
 
 
+def _safe_member_name(name: str, *, allow_spaces: bool) -> bool:
+    if not allow_spaces or " " not in name:
+        return re.fullmatch(INVENTORY_PATH, name) is not None
+    # Reuse the existing grammar without widening catalog or transport paths.
+    # Spaces must have an allowed non-space character on both sides, within
+    # one segment. Normalization is validation-only; archive names stay intact.
+    for index, char in enumerate(name):
+        if char == " " and (
+            index == 0
+            or index == len(name) - 1
+            or re.fullmatch(r"[A-Za-z0-9_.+@-]", name[index - 1]) is None
+            or re.fullmatch(r"[A-Za-z0-9_.+@-]", name[index + 1]) is None
+        ):
+            return False
+    for segment in name.split("/"):
+        prefix = re.split(r"[ .]", segment, maxsplit=1)[0]
+        if re.fullmatch(r"CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9]", prefix, re.IGNORECASE):
+            return False
+    return re.fullmatch(INVENTORY_PATH, name.replace(" ", "_")) is not None
+
+
 def validate_archive(
     path: str,
     raw: bytes | Path,
@@ -48,7 +69,7 @@ def validate_archive(
                 mode = item.external_attr >> 16
                 if (
                     item.orig_filename != item.filename
-                    or re.fullmatch(INVENTORY_PATH, name) is None
+                    or not _safe_member_name(name, allow_spaces=budget.allow_member_spaces)
                     or folded in seen
                     or stat.S_IFMT(mode) not in (0, stat.S_IFREG, stat.S_IFDIR)
                     or item.flag_bits & 1

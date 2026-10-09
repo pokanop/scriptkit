@@ -18,8 +18,11 @@ class ArtifactPolicy:
     max_entries: int = 10000
     max_expansion_ratio: int = 128 * 1024 * 1024
     command_timeout: int = 120
+    allow_member_spaces: bool = False
 
     def __post_init__(self) -> None:
+        if type(self.allow_member_spaces) is not bool:
+            raise ContractError("allow_member_spaces must be boolean")
         ceilings = (2 * 1024**3, 8 * 1024**3, 100000, 128 * 1024 * 1024, 3600)
         for field, ceiling in zip(fields(self), ceilings):
             value = getattr(self, field.name)
