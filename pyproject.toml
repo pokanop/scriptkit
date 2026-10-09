@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pokanop-scriptkit"
-version = "1.3.0"
+version = "1.4.0"
 description = "Dependency-light building blocks for cohesive Python command-line tools"
 readme = "README.md"
 license = "MIT"

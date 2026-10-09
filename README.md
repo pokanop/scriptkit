@@ -1,7 +1,7 @@
 # ScriptKit (working name)
 
 A dependency-light Python **3.11+** runtime for cohesive command-line tools.
-This repository ships the compatible 1.3.0 runtime, versioned data contracts,
+This repository ships the 1.4.0 framework with its compatible runtime, versioned data contracts,
 an opt-in [deterministic project generator](docs/generator.md),
 [offline tool/collection scaffolds](docs/scaffolds.md), and a
 [verified bootstrap and transactional tool manager](docs/bootstrap.md).
@@ -19,7 +19,7 @@ python -m venv .venv
 # Activate .venv using your shell's platform-specific activation command.
 python -m pip install '.[dev]'
 python -m build
-python -m pip install dist/pokanop_scriptkit-1.3.0-py3-none-any.whl
+python -m pip install dist/pokanop_scriptkit-1.4.0-py3-none-any.whl
 scriptkit --version
 python -m scriptkit --help
 ```
