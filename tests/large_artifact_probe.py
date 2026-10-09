@@ -1,0 +1,269 @@
+"""Opt-in end-to-end large-wheel probe. Run with --torch for real PyPI evidence."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import platform
+import subprocess
+import sys
+import zipfile
+from email.parser import BytesParser
+from pathlib import Path
+
+from scriptkit.contracts import (
+    Artifact,
+    ArtifactPolicy,
+    CatalogRelease,
+    CommandSpec,
+    DependencyLock,
+    LockedPackage,
+    Platform,
+    PythonRequirement,
+    ToolRelease,
+    ToolSpec,
+)
+from scriptkit.manager import Installer
+from scriptkit.registry import Registry, RegistryStore, Resolver, VerifiedCache
+from scriptkit.registry.source import RegistryArtifactSource
+
+TORCH_NAME = "torch-2.14.1-cp313-cp313-manylinux_2_28_x86_64.whl"
+TORCH_HASH = "c8f71aabc67bcbfc9373dc131537a5968d04edce73e88add21354a7cd0a76985"
+POLICY = ArtifactPolicy(
+    max_archive_bytes=2 * 1024**3,
+    max_expanded_bytes=4 * 1024**3,
+    max_entries=50000,
+    max_expansion_ratio=2000,
+    command_timeout=1800,
+    member_name_grammar="permissive-wheel",
+)
+
+
+def synthetic(root: Path, *, large: bool = True, torch: bool = False) -> Path:
+    path = root / "probe-1.0.0-py3-none-any.whl"
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as out:
+        out.writestr(
+            "probe.py",
+            "def main():\n"
+            + ("    import torch\n    print(torch.__version__)\n" if torch else "")
+            + "    print('large artifact smoke passed')\n",
+        )
+        out.writestr(
+            "probe-1.0.0.dist-info/METADATA", "Metadata-Version: 2.1\nName: probe\nVersion: 1.0.0\n"
+        )
+        out.writestr(
+            "probe-1.0.0.dist-info/WHEEL",
+            "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+        )
+        out.writestr("probe-1.0.0.dist-info/RECORD", "")
+        if large:
+            # Stored member crosses the registry's historical 64 MiB download cap.
+            stored = zipfile.ZipInfo("probe_data/stored")
+            with out.open(stored, "w", force_zip64=True) as member:
+                for _ in range(65):
+                    member.write(b"y" * 1024**2)
+            for i in range(13043):
+                out.writestr(f"probe_data/{i}", "x")
+            with out.open("probe_data/large", "w", force_zip64=True) as member:
+                for _ in range(140):
+                    member.write(b"x" * 1024**2)
+    return path
+
+
+def scan_members(root: Path, wheels: list[Path]) -> None:
+    from collections import Counter
+    from scriptkit.contracts.archives import _safe_member_name
+
+    groups: Counter[str] = Counter()
+    admitted = []
+    rejected = []
+    total = 0
+    for path in wheels:
+        with zipfile.ZipFile(path) as archive:
+            for info in archive.infolist():
+                total += 1
+                name = info.filename.removesuffix("/") if info.is_dir() else info.filename
+                if not _safe_member_name(name, grammar="permissive-wheel"):
+                    rejected.append({"wheel": path.name, "member": name})
+                elif not _safe_member_name(name, grammar="strict"):
+                    reasons = []
+                    if " " in name:
+                        reasons.append("interior space")
+                    if any(part.startswith(".") for part in name.split("/")):
+                        reasons.append("leading dot")
+                    if "(" in name or ")" in name:
+                        reasons.append("parentheses")
+                    reason = " + ".join(reasons) or "other newly allowed ASCII"
+                    groups[reason] += 1
+                    admitted.append({"wheel": path.name, "member": name, "rule": reason})
+    report = {
+        "wheels": len(wheels),
+        "members": total,
+        "opt_in_only": len(admitted),
+        "groups": dict(groups),
+        "admitted": admitted,
+        "rejected": rejected,
+    }
+    (root / "member-scan.json").write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps(report), flush=True)
+    if rejected:
+        raise RuntimeError("real member scan rejected entries; do not widen grammar")
+
+
+def exercise(root: Path, wheels: list[Path], *, smoke_module: str = "probe") -> Path:
+    scan_members(root, wheels)
+    directory = root / "artifacts"
+    directory.mkdir()
+    items = []
+    packages = []
+    for path in wheels:
+        with path.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        item = Artifact(path.name, digest, path.stat().st_size)
+        if path.name == TORCH_NAME:
+            assert (digest, item.size) == (TORCH_HASH, 554618164)
+        # Move avoids a second full artifact copy in the evidence workspace.
+        path.rename(directory / digest)
+        items.append(item)
+        with zipfile.ZipFile(directory / digest) as archive:
+            name = next(n for n in archive.namelist() if n.endswith(".dist-info/METADATA"))
+            metadata = BytesParser().parsebytes(archive.read(name))
+        import re
+
+        packages.append(
+            LockedPackage(
+                re.sub(r"[-_.]+", "-", metadata["Name"].lower()), metadata["Version"], item
+            )
+        )
+    host = Platform(
+        {"Linux": "linux", "Darwin": "macos", "Windows": "windows"}[platform.system()],
+        {"x86_64": "x86_64", "amd64": "x86_64", "arm64": "arm64", "aarch64": "arm64"}[
+            platform.machine().lower()
+        ],
+    )
+    python = PythonRequirement("3.11.0", "3.99.0")
+    tool = ToolSpec(
+        1,
+        "probe",
+        "1.0.0",
+        "large artifact probe",
+        f"{smoke_module}:main",
+        python,
+        (host,),
+        (CommandSpec(1, "probe", "help", ()),),
+    )
+    main = next(a for a in items if a.path.startswith("probe-"))
+    catalog = CatalogRelease(
+        1,
+        "probe",
+        "1.0.0",
+        (
+            ToolRelease(
+                tool,
+                main,
+                (
+                    DependencyLock(
+                        1, host, python, "pip", tuple(p for p in packages if p.artifact != main)
+                    ),
+                ),
+            ),
+        ),
+    )
+    raw = catalog.canonical_json().encode()
+    (root / "locked-catalog.json").write_bytes(raw)
+    pin = Artifact("catalog.json", hashlib.sha256(raw).hexdigest(), len(raw))
+    cache = VerifiedCache(root / "cache")
+    cache.root.mkdir()
+    (cache.root / pin.sha256).write_bytes(raw)
+    origin = "https://probe.example/"
+    registry = Registry(1, "probe", origin, pin, 9999999999)
+    store = RegistryStore(root / "registries.json")
+    store.add(registry, consent_origin=origin)
+    resolver = Resolver(store, cache, policy=POLICY, artifact_directory=directory)
+    plan = resolver.resolve(
+        "probe/probe@1.0.0",
+        platform=host,
+        python_version=platform.python_version(),
+        generation="first",
+        destination="probe",
+        offline=True,
+    )
+    source = RegistryArtifactSource(
+        resolver, "probe", offline=True, policy=POLICY, artifact_directory=directory
+    )
+    manager = Installer(root / "state", root / "bin", source, policy=POLICY)
+    receipt = manager.install(plan)
+    assert receipt is not None
+    print(
+        json.dumps(
+            {
+                "receipt": str(receipt),
+                "artifacts": len(items),
+                "bytes": sum(a.size for a in items),
+                "torch_sha256": TORCH_HASH if any(a.path == TORCH_NAME for a in items) else None,
+            }
+        )
+    )
+    if sys.platform == "linux":
+        import resource
+
+        print(
+            json.dumps(
+                {
+                    "manager_peak_rss_KiB": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+                    "backend_and_smoke_peak_rss_KiB": resource.getrusage(
+                        resource.RUSAGE_CHILDREN
+                    ).ru_maxrss,
+                }
+            )
+        )
+    return receipt
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(__doc__)
+    parser.add_argument("directory", type=Path)
+    parser.add_argument("--torch", action="store_true")
+    parser.add_argument(
+        "--prepared-torch",
+        action="store_true",
+        help="install already downloaded wheels in an existing directory",
+    )
+    args = parser.parse_args()
+    if not args.prepared_torch:
+        args.directory.mkdir(parents=True, exist_ok=False)
+    wheels = []
+    if args.torch:
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "download",
+                "--only-binary=:all:",
+                "--index-url",
+                "https://pypi.org/simple",
+                "--dest",
+                str(args.directory),
+                "torch==2.14.1",
+            ],
+            check=True,
+        )
+        # A fresh interpreter separates manager RSS from pip download RSS.
+        subprocess.run(
+            [sys.executable, __file__, str(args.directory), "--prepared-torch"], check=True
+        )
+        return
+    if args.prepared_torch:
+        wheels = list(args.directory.glob("*.whl"))
+        if not any(p.name == TORCH_NAME for p in wheels):
+            raise RuntimeError("run on Linux x86_64 CPython 3.13 for the exact target wheel")
+    wheels.append(
+        synthetic(args.directory, large=not args.prepared_torch, torch=args.prepared_torch)
+    )
+    exercise(args.directory, wheels)
+
+
+if __name__ == "__main__":
+    main()

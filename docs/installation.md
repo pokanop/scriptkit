@@ -1,5 +1,8 @@
 # Transactional per-tool installation
 
+For explicit large-wheel budgets, streaming local sources, hard ceilings and
+backend timeout configuration, see [artifact policy](artifact-policy.md).
+
 `scriptkit.manager.Installer` is a reusable library service, not bootstrap/self-update
 or a new CLI command. It consumes data-only `ResolvedPlan` records and injected
 `InstallationSource` / `EnvironmentBackend` ports. The registry, runtime and AI do

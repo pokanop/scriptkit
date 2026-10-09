@@ -7,7 +7,6 @@ is replaced, so running Windows executables need not be renamed or removed.
 from __future__ import annotations
 
 import hashlib
-import io
 import os
 import platform
 import re
@@ -16,10 +15,11 @@ import zipfile
 from collections.abc import Callable
 from pathlib import Path
 
+from scriptkit.contracts.artifacts import ArtifactPolicy, DEFAULT_ARTIFACT_POLICY
 from scriptkit.contracts.models import NAME
 from scriptkit.contracts.archives import validate_archive
 from scriptkit.contracts.catalog import ResolvedPlan
-from scriptkit.contracts.ports import InstallationSource
+from scriptkit.contracts.ports import InstallationSource, StreamingInstallationSource
 from scriptkit.state import StateConflict
 
 from . import launchers, storage
@@ -35,13 +35,16 @@ class Installer:
         source: InstallationSource,
         *,
         backend: PackageBackend | None = None,
+        policy: ArtifactPolicy | None = None,
         launcher_interpreter: str | None = None,
         checkpoint: Callable[[str], None] = lambda phase: None,
     ):
         self.root = Path(os.path.abspath(root))
         self.bin_dir = Path(os.path.abspath(bin_dir))
         self.source = source
-        self.backend = backend or PipBackend()
+        self.policy = policy
+        self.command_timeout = (policy or DEFAULT_ARTIFACT_POLICY).command_timeout
+        self.backend = backend or PipBackend(timeout=self.command_timeout)
         self.launcher_interpreter = launcher_interpreter
         self.checkpoint = checkpoint
         for path in (self.root, self.bin_dir):
@@ -166,31 +169,40 @@ class Installer:
             self._recover(name)
             self._preflight(resolved)
             self.source.authorize(resolved)
-            artifacts = [(a, self.source.fetch(a)) for a in resolved.artifacts]
-            for artifact, raw in artifacts:
-                if len(raw) != artifact.size or hashlib.sha256(raw).hexdigest() != artifact.sha256:
-                    raise ValueError("artifact hash/size mismatch")
-                validate_archive(artifact.path, raw)
-            verify_locks(plan, dict(artifacts))
-            self.checkpoint("fetch")
             generation = tool / "generations" / plan.generation
-            generation.mkdir(parents=True, exist_ok=False)
+            generation.mkdir(mode=0o700, parents=True, exist_ok=False)
             # A failed staging directory is retained, never recursively removed: it
             # cannot become active without a complete receipt and successful smoke.
             wheel_dir = generation / "artifacts"
             wheel_dir.mkdir()
             wheels: list[Path] = []
-            for artifact, raw in artifacts:
+            artifacts = {}
+            for artifact in resolved.artifacts:
+                if self.policy is not None and artifact.size > self.policy.max_archive_bytes:
+                    raise ValueError("artifact exceeds download policy")
                 path = wheel_dir / artifact.path
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(raw)
+                if isinstance(self.source, StreamingInstallationSource):
+                    self.source.fetch_into(artifact, path)
+                else:
+                    # Compatibility for existing byte sources: only one artifact
+                    # is resident, never the entire dependency set.
+                    path.write_bytes(self.source.fetch(artifact))
+                with path.open("rb") as stream:
+                    digest = hashlib.file_digest(stream, "sha256").hexdigest()
+                if path.stat().st_size != artifact.size or digest != artifact.sha256:
+                    raise ValueError("artifact hash/size mismatch")
+                validate_archive(artifact.path, path, policy=self.policy)
+                artifacts[artifact] = path
                 if artifact.path.endswith(".whl"):
                     wheels.append(path)
+            verify_locks(plan, artifacts)
+            self.checkpoint("fetch")
             python = self.backend.stage(generation / "env", tuple(wheels))
             source = generation / "source"
             source.mkdir()
             if resolved.source_kind == "legacy-scripts":
-                with zipfile.ZipFile(io.BytesIO(artifacts[0][1])) as archive:
+                with zipfile.ZipFile(artifacts[resolved.artifacts[0]]) as archive:
                     archive.extractall(
                         source
                     )  # every member validated above; fresh private directory
@@ -204,7 +216,10 @@ class Installer:
                 encoding="utf-8",
             )
             self.checkpoint("stage")
-            run([str(python), "-I", "-B", str(runner), *smoke_args])
+            run(
+                [str(python), "-I", "-B", str(runner), *smoke_args],
+                timeout=self.command_timeout,
+            )
             self.checkpoint("smoke")
             receipt = {
                 "schema_version": 1,
@@ -225,7 +240,8 @@ class Installer:
                 # uv/venv interpreter links are owned links, not their external targets.
                 value = "link:" + os.readlink(path)
             elif path.is_file() and path != root / "receipt.json":
-                value = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+                with path.open("rb") as stream:
+                    value = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
             else:
                 continue
             result[path.relative_to(root).as_posix()] = value
