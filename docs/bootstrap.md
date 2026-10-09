@@ -17,7 +17,9 @@ release provenance workflow. No tag/publication of unreviewed code is performed
 by bootstrap development. **The release owner must bump the distribution and
 runtime version before publishing a manager release**; `1.3.0` is already used
 by the runtime-only wheel and must not be reused. The publishing workflow rejects
-that version; local compatibility development retains it until release preparation.
+that version. The prepared manager release is `1.4.0`; the version bump alone is
+not publication or launch certification. Use its artifacts only after the tagged
+release and provenance verification complete.
 
 Obtain `RELEASE_URL` (the exact `/releases/download/<tag>` URL), `VERSION`,
 `BOOTSTRAP_SHA256`, and `WHEEL_SHA256` from the verified release. Verify provenance
