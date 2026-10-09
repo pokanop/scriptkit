@@ -25,7 +25,7 @@ import sys
 import scriptkit as sk
 
 assert Path(sk.__file__).is_relative_to(Path(sys.prefix)), sk.__file__
-assert metadata.version("pokanop-scriptkit") == sk.__version__ == "1.4.0"
+assert metadata.version("pokanop-scriptkit") == sk.__version__ == "1.5.0"
 assert importlib.util.find_spec("requests") is None
 assert sk.HAS_RICH == (sys.argv[1] == "rich")
 assert list(sk.track([1, 2])) == [1, 2]
