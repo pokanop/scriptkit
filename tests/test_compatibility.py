@@ -21,6 +21,23 @@ def test_public_exports_and_signatures():
     assert (sk.EXIT_OK, sk.EXIT_ERROR, sk.EXIT_INTERRUPT) == (0, 1, 130)
 
 
+def test_additive_artifact_policy_api():
+    from scriptkit.contracts import ArtifactPolicy
+    from scriptkit.manager import Installer
+    from scriptkit.registry import Resolver
+    from scriptkit.registry.source import RegistryArtifactSource
+
+    import re
+
+    golden = json.loads(Path(__file__).with_name("public_api_artifact_policy.json").read_text())
+    assert {
+        cls.__name__: re.sub(r" at 0x[0-9a-fA-F]+", "", str(inspect.signature(cls))).replace(
+            "pathlib._local.Path", "pathlib.Path"
+        )
+        for cls in (ArtifactPolicy, Installer, Resolver, RegistryArtifactSource)
+    } == golden
+
+
 @pytest.mark.parametrize(
     "value, expected", [(None, 0), (True, 0), (False, 0), ("7", 0), (7, 7), (-1, -1)]
 )

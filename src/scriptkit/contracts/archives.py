@@ -5,6 +5,9 @@ from __future__ import annotations
 import io
 import re
 import stat
+from pathlib import Path
+
+from scriptkit.contracts.artifacts import ArtifactPolicy, DEFAULT_ARTIFACT_POLICY
 import zipfile
 import zlib
 
@@ -12,7 +15,19 @@ from scriptkit.contracts.codec import ContractError
 from scriptkit.contracts.models import INVENTORY_PATH
 
 
-def validate_archive(path: str, raw: bytes, *, max_expanded: int = 128 * 1024 * 1024) -> str:
+def validate_archive(
+    path: str,
+    raw: bytes | Path,
+    *,
+    max_expanded: int = 128 * 1024 * 1024,
+    policy: ArtifactPolicy | None = None,
+) -> str:
+    budget = policy or DEFAULT_ARTIFACT_POLICY
+    if policy is not None:
+        max_expanded = policy.max_expanded_bytes
+        size = len(raw) if isinstance(raw, bytes) else raw.stat().st_size
+        if size > policy.max_archive_bytes:
+            raise ContractError("archive bytes exceed policy")
     if path.endswith(".whl"):
         kind = "wheel"
     elif path.endswith(".scripts.zip"):
@@ -20,9 +35,9 @@ def validate_archive(path: str, raw: bytes, *, max_expanded: int = 128 * 1024 * 
     else:
         raise ContractError("only wheels and .scripts.zip legacy bundles are supported")
     try:
-        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        with zipfile.ZipFile(io.BytesIO(raw) if isinstance(raw, bytes) else raw) as archive:
             infos = archive.infolist()
-            if not infos or len(infos) > 10000:
+            if not infos or len(infos) > budget.max_entries:
                 raise ContractError("archive entry count outside policy")
             seen: set[str] = set()
             files: set[str] = set()
@@ -48,9 +63,16 @@ def validate_archive(path: str, raw: bytes, *, max_expanded: int = 128 * 1024 * 
                 total += item.file_size
                 if total > max_expanded:
                     raise ContractError("expanded archive exceeds policy")
-                # Read every member to validate CRC and actual expansion before acceptance.
+                if item.file_size > max(1, item.compress_size) * budget.max_expansion_ratio:
+                    raise ContractError("archive expansion ratio exceeds policy")
+                # Bounded reads validate full CRC without materializing large members.
                 with archive.open(item) as stream:
-                    if len(stream.read(item.file_size + 1)) != item.file_size:
+                    actual = 0
+                    while chunk := stream.read(1024 * 1024):
+                        actual += len(chunk)
+                        if actual > item.file_size:
+                            raise ContractError("archive member size mismatch")
+                    if actual != item.file_size:
                         raise ContractError("archive member size mismatch")
             if any(
                 "/".join(name.split("/")[:i]) in files

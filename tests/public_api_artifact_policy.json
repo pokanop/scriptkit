@@ -1,0 +1,6 @@
+{
+  "ArtifactPolicy": "(max_archive_bytes: int = 67108864, max_expanded_bytes: int = 134217728, max_entries: int = 10000, max_expansion_ratio: int = 134217728, command_timeout: int = 120) -> None",
+  "Installer": "(root: 'Path', bin_dir: 'Path', source: 'InstallationSource', *, backend: 'PackageBackend | None' = None, policy: 'ArtifactPolicy | None' = None, launcher_interpreter: 'str | None' = None, checkpoint: 'Callable[[str], None]' = <function Installer.<lambda>>)",
+  "Resolver": "(store: 'RegistryStore', cache: 'VerifiedCache', *, clock: 'Callable[[], float]' = <built-in function time>, policy: 'ArtifactPolicy | None' = None, artifact_directory: 'Path | None' = None)",
+  "RegistryArtifactSource": "(resolver: scriptkit.registry.resolver.Resolver, namespace: str, *, offline: bool = False, policy: scriptkit.contracts.artifacts.ArtifactPolicy | None = None, artifact_directory: pathlib.Path | None = None)"
+}

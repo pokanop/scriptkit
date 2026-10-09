@@ -5,6 +5,10 @@ from __future__ import annotations
 import hashlib
 import time
 from collections.abc import Callable
+from pathlib import Path
+
+from scriptkit.contracts.artifacts import ArtifactPolicy
+from scriptkit.contracts.models import Artifact
 
 from scriptkit.contracts.codec import ContractError
 from scriptkit.contracts.catalog import ResolvedPlan as ResolvedPlan
@@ -26,10 +30,30 @@ class Resolver:
         cache: VerifiedCache,
         *,
         clock: Callable[[], float] = time.time,
+        policy: ArtifactPolicy | None = None,
+        artifact_directory: Path | None = None,
     ):
         self.store = store
         self.cache = cache
         self.clock = clock
+        self.policy = policy
+        self.artifact_directory = artifact_directory
+
+    def _validate_artifact(self, origin: str, artifact: Artifact, offline: bool) -> str:
+        if self.policy is not None and artifact.size > self.policy.max_archive_bytes:
+            raise ContractError("artifact exceeds source policy")
+        if self.artifact_directory is None:
+            return validate_archive(
+                artifact.path, self.cache.get(origin, artifact, offline=offline), policy=self.policy
+            )
+        path = self.artifact_directory / artifact.sha256
+        if path.is_symlink() or not path.is_file() or path.stat().st_size != artifact.size:
+            raise ContractError("local artifact missing or unsafe size")
+        with path.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        if digest != artifact.sha256:
+            raise ContractError("artifact SHA-256 mismatch")
+        return validate_archive(artifact.path, path, policy=self.policy)
 
     def _catalog(self, namespace: str, offline: bool) -> tuple[Registry, CatalogRelease]:
         registry = next((r for r in self.store.list() if r.namespace == namespace), None)
@@ -87,17 +111,15 @@ class Resolver:
         artifacts = (release.artifact, *(p.artifact for lock in locks for p in lock.packages))
         # All transitive packages must already be enumerated in the trusted lock.
         # No resolver or package backend runs here; index access is never implicit.
-        source_kind = validate_archive(
-            release.artifact.path,
-            self.cache.get(registry.origin, release.artifact, offline=offline),
-        )
+        source_kind = self._validate_artifact(registry.origin, release.artifact, offline)
         for lock in locks:
             for package in lock.packages:
-                raw = self.cache.get(registry.origin, package.artifact, offline=offline)
                 if lock.backend == "pip":
                     if not package.artifact.path.endswith(".whl"):
                         raise ContractError("pip dependencies must be locked wheels")
-                    validate_archive(package.artifact.path, raw)
+                    self._validate_artifact(registry.origin, package.artifact, offline)
+                else:
+                    self.cache.get(registry.origin, package.artifact, offline=offline)
         return ResolvedPlan(
             1,
             registry,

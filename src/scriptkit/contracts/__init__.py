@@ -1,5 +1,6 @@
 """Stable data-only contracts, independent of manager/generator/AI packages."""
 
+from .artifacts import ArtifactPolicy
 from .codec import ContractError, resource_text
 from .models import (
     AIProposal,
@@ -24,6 +25,7 @@ __all__ = [
     "AIProposal",
     "ArgumentSpec",
     "Artifact",
+    "ArtifactPolicy",
     "ArtifactSource",
     "CatalogRelease",
     "Clock",
