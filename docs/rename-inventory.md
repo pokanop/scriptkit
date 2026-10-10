@@ -20,10 +20,16 @@ POK-645 procedure after Sahel's decision:
 4. Regenerate contract exports, scaffold golden hashes, installed-resource/API
    snapshots, consumer constraints and release filenames using their owning tools/tests.
    Do not blind-replace hashes, attestations or old-version compatibility fixtures.
-5. Inventory the scripts consumer with `--consumer PATH` and update its verified
+5. Keep the historical release identity/pins and scripts consumer revision unchanged
+   during the candidate rename. Certification uses the pinned sdist's own suite and
+   fixture/import identity; the candidate matrix and benchmark use head metadata.
+   Follow [pin advancement](certification.md#advancing-pins-without-a-releasemerge-cycle):
+   merge the verified candidate first, publish/verify authorized GitHub artifacts,
+   then advance all pins atomically in a reviewed follow-up (never fabricate pins).
+6. Inventory the scripts consumer with `--consumer PATH` and update its verified
    constraints/bootstrap/docs only after the renamed release is verified. Rehearse
    the old-to-new upgrade and rollback; rerun all three-OS certification jobs.
-6. Regenerate this inventory and review every remaining old-name hit. Configure
+7. Regenerate this inventory and review every remaining old-name hit. Configure
    publishing only under POK-645's separate owner-approved launch gate.
 
 Every row identifies an exact tracked file and matching content lines; matching
@@ -57,7 +63,7 @@ are excluded to avoid self-reference. Line numbers are revision-specific.
 | `docs/quality-and-release.md` | 47, 82, 83, 100, 101, 104 |
 | `docs/registry-author.md` | 20 |
 | `docs/registry.md` | 3, 4, 8 |
-| `docs/release-pins.json` | 2, 6, 7, 14, 15 |
+| `docs/release-pins.json` | 2, 5, 6, 7, 9, 10, 17, 18 |
 | `docs/runtime-io.md` | 11, 55, 100, 127 |
 | `docs/runtime.md` | 1, 11, 14, 32, 50, 52, 55, 57, 60, 68, 83, 90, 98, 109, 121, 133, 143, 148, 184, 217, 261, 296, 297 |
 | `docs/scaffolds.md` | 6, 20, 22, 23, 24, 90, 94, 96, 97 |
@@ -206,11 +212,11 @@ are excluded to avoid self-reference. Line numbers are revision-specific.
 | `tests/test_style.py` | 1, 3 |
 | `tests/test_text.py` | 1, 3 |
 | `tests/test_windows_job.py` | 8 |
-| `tools/benchmark.py` | 37, 38, 39, 40, 41, 72, 73 |
-| `tools/certify_release.py` | 46, 61, 119, 203, 208, 209, 210, 211 |
-| `tools/check_artifact.py` | 25, 28, 33, 54, 60, 63, 74, 90 |
+| `tools/benchmark.py` | 37, 125, 162 |
+| `tools/certify_release.py` | 87 |
+| `tools/check_artifact.py` | 34, 62 |
 | `tools/check_failure_gates.py` | 17 |
 | `tools/export_contracts.py` | 6, 60 |
 | `tools/rehearse_release.py` | 50, 64, 105 |
-| `tools/tests/test_certification.py` | 134, 135, 136 |
+| `tools/tests/test_certification.py` | 43, 207, 208, 209 |
 | `tools/tests/test_quality_tools.py` | 76, 85 |

@@ -15,6 +15,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tarfile
+import tomllib
 import venv
 import zipfile
 
@@ -29,21 +31,43 @@ def run(*args, cwd, env=None):
 def verify_assets(directory, pins):
     """Exact manifest membership and bytes; authenticated pins are reviewed in git."""
     expected = pins["assets"]
-    assert {p.name for p in directory.iterdir()} == set(expected), "unexpected/missing asset"
+    if {p.name for p in directory.iterdir()} != set(expected):
+        raise ValueError("unexpected/missing asset")
     for name, digest in expected.items():
-        assert hashlib.sha256((directory / name).read_bytes()).hexdigest() == digest, name
+        if hashlib.sha256((directory / name).read_bytes()).hexdigest() != digest:
+            raise ValueError("asset digest mismatch: " + name)
     manifest = {}
     for line in (directory / "SHA256SUMS").read_text().splitlines():
         digest, name = line.split()
-        assert name not in manifest, "duplicate checksum entry"
+        if name in manifest:
+            raise ValueError("duplicate checksum entry")
         manifest[name] = digest
-    assert manifest == {k: v for k, v in expected.items() if k not in ("SHA256SUMS", "build.json")}
+    if manifest != {k: v for k, v in expected.items() if k not in ("SHA256SUMS", "build.json")}:
+        raise ValueError("checksum manifest membership mismatch")
 
 
-def package_payload(wheel):
+def extract_suite(sdist, destination, pins):
+    """Extract only authenticated regular sdist contents, never links/devices."""
+    with tarfile.open(sdist) as archive:
+        if any(not (member.isfile() or member.isdir()) for member in archive.getmembers()):
+            raise ValueError("non-regular sdist member")
+        archive.extractall(destination, filter="data")
+    roots = list(destination.iterdir())
+    if len(roots) != 1 or not roots[0].is_dir():
+        raise ValueError("expected one sdist root")
+    root = roots[0]
+    metadata = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    if metadata["name"] != pins["distribution"] or metadata["version"] != pins["version"]:
+        raise ValueError("historical sdist identity mismatch")
+    if metadata["scripts"].get(pins["command"]) != pins["module"] + ".entrypoint:main":
+        raise ValueError("historical sdist entrypoint mismatch")
+    return root
+
+
+def package_payload(wheel, module):
     with zipfile.ZipFile(wheel) as archive:
         return {
-            name: archive.read(name) for name in archive.namelist() if name.startswith("scriptkit/")
+            name: archive.read(name) for name in archive.namelist() if name.startswith(module + "/")
         }
 
 
@@ -54,6 +78,8 @@ def main():
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     pins = json.loads((ROOT / "docs/release-pins.json").read_text())
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    candidate_module = next(iter(project["scripts"].values())).split(".")[0]
     env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYTHONHOME")}
     env.update(PYTHONUTF8="1", PIP_DISABLE_PIP_VERSION_CHECK="1", NO_COLOR="1")
     report = {"pins": pins, "steps": [], "complete": False}
@@ -95,6 +121,8 @@ def main():
                     env=env,
                 )
             report["steps"].append("all seven assets: hashes, exact manifest, pinned attestations")
+            suite = extract_suite(assets / pins["sdist"], work / "historical-suite", pins)
+            report["suite_source"] = pins["sdist"]
             wheel = assets / pins["wheel"]
             manager_root = work / "manager café"
             bootstrap = [
@@ -116,7 +144,11 @@ def main():
                 pins["version"],
             ]
             run(*bootstrap, cwd=work, env=env)
-            launcher = manager_root / "bin" / ("scriptkit.cmd" if os.name == "nt" else "scriptkit")
+            launcher = (
+                manager_root
+                / "bin"
+                / (pins["command"] + ".cmd" if os.name == "nt" else pins["command"])
+            )
             run(launcher, "--json", "doctor", cwd=work, env=env)
             run(*bootstrap, cwd=work, env=env)
             run(launcher, "self-rollback", cwd=work, env=env)
@@ -127,6 +159,8 @@ def main():
                 sys.executable,
                 ROOT / "tools/check_artifact.py",
                 wheel,
+                "--suite-root",
+                suite,
                 "--results",
                 output / "framework.xml",
                 cwd=ROOT,
@@ -166,7 +200,6 @@ def main():
                 "Scripts/python.exe" if os.name == "nt" else "bin/python"
             )
             run(baseline_python, "-m", "pip", "install", wheel, "pytest==9.1.1", cwd=work, env=env)
-            shutil.copytree(ROOT / "tests", work / "tests")
             shutil.copy(ROOT / "tools/benchmark.py", work / "benchmark.py")
             run(
                 baseline_python,
@@ -175,6 +208,14 @@ def main():
                 output / "candidate-benchmark.json",
                 "--peer-python",
                 candidate_python,
+                "--package",
+                pins["module"],
+                "--tests",
+                suite / "tests",
+                "--peer-package",
+                candidate_module,
+                "--peer-tests",
+                ROOT / "tests",
                 cwd=work,
                 env=env,
             )
@@ -195,21 +236,25 @@ def main():
                 env=env,
             )
             rebuilt_wheel = next(rebuilt.glob("*.whl"))
-            assert package_payload(rebuilt_wheel) == package_payload(wheel), "sdist payload drift"
+            if package_payload(rebuilt_wheel, pins["module"]) != package_payload(
+                wheel, pins["module"]
+            ):
+                raise ValueError("sdist payload drift")
             clean = work / "sdist-env"
             venv.EnvBuilder(with_pip=True).create(clean)
             python = clean / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
             run(python, "-m", "pip", "install", "--no-index", rebuilt_wheel, cwd=work, env=env)
-            run(python, "-I", "-m", "scriptkit", "--help", cwd=work, env=env)
+            run(python, "-I", "-m", pins["module"], "--help", cwd=work, env=env)
             run(
                 python,
                 "-I",
                 "-c",
-                "from pathlib import Path; import scriptkit,sys; "
-                "assert Path(scriptkit.__file__).is_relative_to(sys.prefix); "
-                f"assert scriptkit.__version__ == {pins['version']!r}; "
-                "from scriptkit.contracts import resource_text; "
-                "assert resource_text('ToolSpec.example.json')",
+                "from pathlib import Path; import importlib,sys; "
+                f"runtime = importlib.import_module({pins['module']!r}); "
+                "assert Path(runtime.__file__).is_relative_to(sys.prefix); "
+                f"assert runtime.__version__ == {pins['version']!r}; "
+                f"contracts = importlib.import_module({pins['module'] + '.contracts'!r}); "
+                "assert contracts.resource_text('ToolSpec.example.json')",
                 cwd=work,
                 env=env,
             )

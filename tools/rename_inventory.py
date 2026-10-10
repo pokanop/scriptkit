@@ -68,10 +68,16 @@ POK-645 procedure after Sahel's decision:
 4. Regenerate contract exports, scaffold golden hashes, installed-resource/API
    snapshots, consumer constraints and release filenames using their owning tools/tests.
    Do not blind-replace hashes, attestations or old-version compatibility fixtures.
-5. Inventory the scripts consumer with `--consumer PATH` and update its verified
+5. Keep the historical release identity/pins and scripts consumer revision unchanged
+   during the candidate rename. Certification uses the pinned sdist's own suite and
+   fixture/import identity; the candidate matrix and benchmark use head metadata.
+   Follow [pin advancement](certification.md#advancing-pins-without-a-releasemerge-cycle):
+   merge the verified candidate first, publish/verify authorized GitHub artifacts,
+   then advance all pins atomically in a reviewed follow-up (never fabricate pins).
+6. Inventory the scripts consumer with `--consumer PATH` and update its verified
    constraints/bootstrap/docs only after the renamed release is verified. Rehearse
    the old-to-new upgrade and rollback; rerun all three-OS certification jobs.
-6. Regenerate this inventory and review every remaining old-name hit. Configure
+7. Regenerate this inventory and review every remaining old-name hit. Configure
    publishing only under POK-645's separate owner-approved launch gate.
 
 Every row identifies an exact tracked file and matching content lines; matching

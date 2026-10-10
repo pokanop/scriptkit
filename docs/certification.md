@@ -25,11 +25,16 @@ seven asset digests and consumer revision. The runner:
 2. Runs the documented bootstrap against the real public HTTPS wheel URL in a
    private Unicode/space-containing root; checks doctor, installs a second manager
    generation and exercises self-rollback. No PATH or user configuration is changed.
-3. Installs the release wheel into a clean venv outside the source checkout and
-   runs the full copied suite, with imports checked against the venv prefix.
-   Installed resources, POSIX/PowerShell bootstrap, registry consent, tool lifecycle,
-   failures, interruption, recovery and AI fixture boundaries are exercised.
-4. Runs `test_authored_tool_release_journey`: installed manager → offline scaffold
+3. Extracts the already authenticated sdist (regular files only) and checks its
+   metadata against the **historical** distribution/version/CLI/import in the pins.
+   Installs the release wheel into a clean venv outside the source checkout and
+   runs only that sdist's own tests/examples/installers using `--suite-root`, with
+   imports checked against the venv prefix. Never runs head tests against an old
+   release. Installed resources, POSIX/PowerShell bootstrap, registry consent, tool
+   lifecycle, failures, interruption, recovery and AI fixture boundaries are exercised.
+4. The separate 12-cell `runtime` matrix runs the **head** suite against the
+   **candidate** wheel, including `test_authored_tool_release_journey`:
+   installed manager → offline scaffold
    → handwritten handler → fixture-backed AI disclosure/review/apply → two built
    wheels → explicit catalog trust → install/run (answer 7) → update/run (42) →
    rollback/run (7) → uninstall. Real pip environments and launchers are used.
@@ -44,7 +49,10 @@ seven asset digests and consumer revision. The runner:
    install/update/interrupted-repair/ownership/source-rollback/used-clone rehearsal.
    Config and wrapper preservation are asserted. No user's installation is touched.
 7. Benchmarks the installed release and a newly built current-head candidate on the
-   **same runner**, retaining raw samples and enforcing regression budgets.
+   **same runner**, retaining raw samples and enforcing regression budgets. Baseline
+   workers import the pinned historical module and its sdist's installer fixture;
+   candidate workers use the current pyproject entrypoint module and head fixture.
+   The worker protocol is shared, not the implementation/suite or import identity.
 
 `certification.json` is written even on failure (`complete: false`); only a true
 completion plus green job represents a pass. JUnit `framework.xml` and `consumer.xml`,
@@ -57,6 +65,44 @@ Network is required for GitHub verification, build-tool provisioning and origina
 consumer dependency acquisition. Authoring and the deterministic tool registry
 journey are offline. This is clean-environment acceptance, not an air-gapped install
 claim. All provider behavior is synthetic; real secrets/data never enter CI.
+
+## Advancing pins without a release/merge cycle
+
+The required gate has two independent inputs: the already published, authenticated
+release in `release-pins.json` and the current candidate metadata/source. A normal
+version bump or coordinated rename **leaves the historical pins unchanged**.
+`distribution`, `module`, `command`, repository, tag and asset names describe the
+old release, not head; the pins test permits `pins.version <= project.version`.
+Do not reset version numbering during the rename without a separately reviewed
+lineage policy. Head tests are never retroactively imposed on the old release.
+
+POK-645 first changes candidate names/imports/CLI/repository and regenerates its
+own templates/snapshots while retaining the old pins and pinned scripts consumer.
+The candidate runtime matrix and the historical three-OS certification can both
+pass **before** any renamed release exists. Benchmark imports/fixture paths are
+explicitly selected per worker, so changing candidate imports cannot affect the
+old worker. Never mechanically replace historical names or hashes in the pins.
+
+After the candidate is reviewed, CI-green and merged, an authorized release owner
+builds/signs a new immutable GitHub release using the normal release workflow.
+Only then, in a reviewed follow-up change:
+
+1. Download and independently verify every new asset's attestation against exact
+   source/signing SHA, ref and workflow; verify the manifest and sdist metadata.
+2. Advance the complete pins record atomically: historical identity fields, version,
+   tag, commit, filenames and all seven digests. Never invent pins to unblock a PR,
+   overwrite an old asset or disable certification. Keep old pins in Git history.
+3. Advance `scripts_commit` only to a reviewed consumer compatible with those pins;
+   its migration/rollback tests must still work. Coordinate renamed-consumer release
+   constraints instead of silently running the old adapter against a new import.
+4. Rerun three-OS certification, current candidate runtime tests, package/resource
+   parity and performance comparison; update acquisition docs and rename inventories.
+   Review any required historical-suite dependency changes explicitly.
+
+This procedure does not enable PyPI or authorize a final name. Historical fixtures
+are trusted, verified release code; live GitHub/PyPI/network availability remains a
+CI dependency. Current-head features and failures are covered by current-head tests,
+not claimed to have existed in an earlier release.
 
 ## Performance method and budgets
 
