@@ -43,6 +43,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wheel", type=Path)
     parser.add_argument("--rich", action="store_true")
+    parser.add_argument("--benchmark", type=Path, help="Write installed benchmark JSON")
+    parser.add_argument("--results", type=Path, help="Retain installed-suite JUnit evidence")
     parser.add_argument("--rich-version", help="Test a specific supported Rich version")
     args = parser.parse_args()
     if args.rich_version and not args.rich:
@@ -107,6 +109,11 @@ def main() -> None:
             shutil.copy(root / installer, work / installer)
         run(str(python), "-I", "-m", "pytest", "-q", "tests", "--junitxml=results.xml")
         verify(work / "results.xml")
+        if args.results:
+            shutil.copy(work / "results.xml", args.results.resolve())
+        if args.benchmark:
+            shutil.copy(root / "tools/benchmark.py", work / "benchmark.py")
+            run(str(python), "-I", str(work / "benchmark.py"), str(args.benchmark.resolve()))
         print(f"Installed wheel verified ({'rich' if args.rich else 'bare'}): {wheel.name}")
 
 

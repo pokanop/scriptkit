@@ -2,7 +2,9 @@
 
 ## Required checks
 
-`required-quality` is the stable branch-protection check (GitHub Actions app 15368).
+`required-quality` is the stable aggregate check (GitHub Actions app 15368).
+Main gating is owner-accepted procedure-only as of 2026-10-10, not configured
+branch protection; see [security certification](security-certification.md).
 It always runs and rejects failed, cancelled **and skipped** prerequisite jobs:
 
 - `runtime`: all 12 Linux/macOS/Windows × Python 3.11–3.14 cells, unit/integration
@@ -23,7 +25,12 @@ It always runs and rejects failed, cancelled **and skipped** prerequisite jobs:
   byte-identical wheel/sdist comparison, all package resources and license present,
   strict metadata checks, SHA256 verification, and installed bare/Rich suites.
 
-Every runtime/installed suite must execute at least 150 passing tests (157 currently;
+- `certification`: three-OS verification of all pinned GitHub release attestations,
+  real bootstrap, installed-wheel/sdist and authored-tool journeys, original consumer
+  migration/rollback, and same-runner candidate/release performance budgets.
+  Evidence is retained as `certification-<os>` artifacts.
+
+Every runtime/installed suite must execute at least 150 passing tests (over 1,000 now;
 platform/Rich-specific individual skips are allowed). Empty/all-skipped suites fail.
 No paths filters, continue-on-error, privileged PR events, or secret-bearing PR jobs.
 Job timeouts cover hangs/interruption; gate tests cover failure and recovery. Coverage
@@ -82,7 +89,13 @@ Record a green **Release → Run workflow** on `main`, including provenance gene
 and verification, in POK-616 after merge before the provenance acceptance criterion
 is complete. PR CI validates pins but intentionally cannot exercise OIDC signing.
 
-## Owner setup before the first real publication
+## Deferred owner setup before PyPI publication (POK-645 only)
+
+The following is a future launch checklist, **not authorization to configure or
+publish now**. Verified GitHub v1.5.0 artifacts already exist under the provisional
+identity. Do not set `PYPI_PUBLISH_ENABLED`, configure a Trusted Publisher or choose
+a final name in POK-631. The version-bump prerequisite below was fulfilled by the
+manager releases; never rewrite their immutable artifacts.
 
 1. Resolve the ScriptKit collision with johnlindquist/kit and confirm ownership/
    availability of provisional distribution `pokanop-scriptkit`. Do not publish
@@ -107,10 +120,12 @@ is complete. PR CI validates pins but intentionally cannot exercise OIDC signing
    ancestry and exact metadata/tag equality. Inspect the Release run and approve the
    environment; independently download artifacts and verify their attestations.
 
-Branch protection must require `required-quality`, up-to-date branches, one approval,
-resolved conversations, and linear history, including administrators. The shared
-agent GitHub account cannot self-approve: an independent GitHub reviewer is required;
-do not relax protection to work around this. Tag rules restrict creation, update and
+If technical branch protection is restored, it should require `required-quality`,
+up-to-date branches, one approval, resolved conversations and linear history,
+including administrators. The owner explicitly accepted procedure-only main gating
+on 2026-10-10; agents still require independent exact-head Studio review and green CI.
+The shared agent GitHub account cannot self-approve. Do not alter live protections
+or substitute a self-review. Tag rules restrict creation, update and
 deletion but explicitly allow the repository-admin role to bypass them; the shared
 agent token has that role (`current_user_can_bypass: always`). This is **not** an
 independent publishing approval boundary. The `pypi` environment has admin bypass

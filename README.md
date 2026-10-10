@@ -5,12 +5,23 @@ This repository ships the 1.5.0 framework with its compatible runtime, versioned
 an opt-in [deterministic project generator](docs/generator.md),
 [offline tool/collection scaffolds](docs/scaffolds.md), and a
 [verified bootstrap and transactional tool manager](docs/bootstrap.md).
-AI integration remains under development.
+Optional [BYOK AI authoring](docs/ai-proposals.md) uses explicit disclosure and
+reviewed proposals; manual generation works entirely offline.
 
 > The working name overlaps with [johnlindquist/kit](https://github.com/johnlindquist/kit),
 > a separate project. No affiliation is implied. `pokanop-scriptkit` is provisional
 > build metadata, **not a claimed available PyPI name**. Namespace/brand review
-> must precede public package publication. No release/upload workflow is enabled.
+> must precede public package publication. Verified GitHub releases are available;
+> PyPI publication remains disabled and final naming belongs to POK-645.
+
+## Install a verified release
+
+Start with [onboarding](docs/getting-started.md), then the
+[CLI/API reference](docs/cli-reference.md), [registry-author guide](docs/registry-author.md),
+[generator upgrades](docs/generator-upgrades.md), [migration/rollback](docs/migration.md)
+and [support matrix](docs/support.md). [Certification](docs/certification.md)
+records artifact/platform/performance evidence; the [rename inventory](docs/rename-inventory.md)
+keeps this provisional identity ready for the owner-approved rename.
 
 ## Build and try
 

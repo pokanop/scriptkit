@@ -7,19 +7,14 @@ PATH values, shell profiles or execution policies are changed automatically.
 
 ## Release selection and verification
 
-There is not yet a published **manager-capable** release. The existing
-[`runtime-1.3.0-7c17061`](https://github.com/pokanop/scriptkit/releases/tag/runtime-1.3.0-7c17061)
-is a real, immutable compatibility-runtime artifact, **not** a manager release;
-do not use it for this workflow. The next reviewed release must publish the
-rehearsal's `install.sh`, `install.ps1`, `bootstrap.py`, wheel, `SHA256SUMS` and
-`build.json`. These are hashed by the release rehearsal and covered by the
-release provenance workflow. No tag/publication of unreviewed code is performed
-by bootstrap development. **The release owner must bump the distribution and
-runtime version before publishing a manager release**; `1.3.0` is already used
-by the runtime-only wheel and must not be reused. The publishing workflow rejects
-that version. The prepared manager release is `1.5.0`; the version bump alone is
-not publication or launch certification. Use its artifacts only after the tagged
-release and provenance verification complete.
+The verified **manager-capable** GitHub release is
+[`v1.5.0`](https://github.com/pokanop/scriptkit/releases/tag/v1.5.0).
+Start with the concrete [onboarding commands](getting-started.md) and the reviewed
+[release pins](release-pins.json). Its scripts, wheel, sdist, checksum manifest and
+build metadata have pinned GitHub provenance. The historical runtime-only
+`runtime-1.3.0-7c17061` is **not** a manager release; do not use it here.
+GitHub release availability is not PyPI publication or final-name approval.
+Never overwrite an existing release or reuse 1.3.0 for manager artifacts.
 
 Obtain `RELEASE_URL` (the exact `/releases/download/<tag>` URL), `VERSION`,
 `BOOTSTRAP_SHA256`, and `WHEEL_SHA256` from the verified release. Verify provenance
@@ -30,8 +25,7 @@ these **exact** pins: the manager records the requested version, SHA-256, source
 URL and generation in its receipt. There is no implicit latest/index fallback.
 Even a mutable wheel URL must match the explicit pinned digest.
 
-Pinned curl-to-shell (variables below are intentional release inputs, not a
-claim that a manager release exists today):
+Pinned curl-to-shell (variables below must come from the verified release inputs):
 
 ```sh
 curl --fail --silent --show-error --location "$RELEASE_URL/install.sh" |

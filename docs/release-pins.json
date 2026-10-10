@@ -1,0 +1,18 @@
+{
+  "repository": "pokanop/scriptkit",
+  "tag": "v1.5.0",
+  "version": "1.5.0",
+  "commit": "96714be2479b4b4b1b6207a4d8db66c3aa07ceea",
+  "wheel": "pokanop_scriptkit-1.5.0-py3-none-any.whl",
+  "sdist": "pokanop_scriptkit-1.5.0.tar.gz",
+  "scripts_commit": "68f12bc5b4baf845916a77e5e47dd0e5b6ab0da6",
+  "assets": {
+    "bootstrap.py": "45ccff104edaa5e6dedbd6c7c5e1b34d4d70c256fe68ef161e00eb6500645607",
+    "build.json": "34dd476bf063492c073ec8bcd4604d999dc979176f17fb19607280b19df657fe",
+    "install.ps1": "0e8a45ca880888edd654475a09dd7d6f93a83c43b2c5504008612ecc3b6767db",
+    "install.sh": "0954978d0f5d574f9b4896b68e0243d414c3b0310a51b693e96bc2c7ef0b5685",
+    "pokanop_scriptkit-1.5.0-py3-none-any.whl": "89307e39af78f0c92d7002e60b30cf10e5015c35aaa5bc67b57b547822bdc75b",
+    "pokanop_scriptkit-1.5.0.tar.gz": "71507047b08e64de8cf1d1ca2a884eb842df7fa9bfc266776b2ded08e470404b",
+    "SHA256SUMS": "e86a14c3d13b7c565e023a5c19beacdd8ff5a656ba1d21f61010f68e62fc6bf6"
+  }
+}
