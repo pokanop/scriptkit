@@ -51,6 +51,12 @@ def configure(parser: argparse.ArgumentParser) -> None:
         install.add_argument("--dry-run", action="store_true")
     for verb in ("rollback", "recover", "uninstall"):
         commands.add_parser(verb).add_argument("name")
+    prune = commands.add_parser("prune", help="reclaim retired receipt-owned generations")
+    prune.add_argument(
+        "--keep", type=int, default=1, help="previous generations to keep (minimum 1)"
+    )
+    prune.add_argument("--uninstalled", action="store_true", help="include uninstalled tools")
+    prune.add_argument("--dry-run", action="store_true")
     update = commands.add_parser("self-update")
     update.add_argument("--wheel", required=True)
     update.add_argument("--sha256", required=True)
@@ -86,6 +92,16 @@ def dispatch(args: argparse.Namespace, context: OutputContext) -> object:
             "on_path": str(root / "bin") in os.environ.get("PATH", "").split(os.pathsep),
             "guidance": "Install Python 3.11+ with venv/ensurepip. Add the bin directory to PATH explicitly; rerun the pinned bootstrap to repair.",
         }
+        installer = Installer(root / "tools", root / "bin", None)  # type: ignore[arg-type]
+        reclamation = (
+            installer.prune(dry_run=True)
+            if (root / "tools").exists()
+            else {"bytes": 0, "paths": [], "foreign": []}
+        )
+        health["reclamation"] = reclamation
+        health["guidance"] = str(health["guidance"]) + (
+            " Reclaim retired tools: scriptkit prune --dry-run, then scriptkit prune (optionally --uninstalled)."
+        )
         if context.policy.machine:
             return health
         return "\n".join(
@@ -97,6 +113,7 @@ def dispatch(args: argparse.Namespace, context: OutputContext) -> object:
                 f"Previous generation: {state.get('previous') or 'none'}",
                 f"Commands: {health['bin']}",
                 f"Commands on PATH: {'yes' if health['on_path'] else 'no'}",
+                f"Reclaimable: {reclamation['bytes']} bytes",
                 str(health["guidance"]),
             )
         )
@@ -173,6 +190,17 @@ def dispatch(args: argparse.Namespace, context: OutputContext) -> object:
             return f"Dry run: would {args.command} {args.target}; no changes made."
         verb = "Installed" if args.command == "install" else "Updated"
         return f"{verb} {args.target}."
+    if args.command == "prune":
+        result = installer.prune(keep=args.keep, uninstalled=args.uninstalled, dry_run=args.dry_run)
+        if context.policy.machine:
+            return result
+        return "\n".join(
+            [
+                f"{'Would reclaim' if args.dry_run else 'Reclaimed'} {result['bytes']} bytes.",
+                *result["paths"],
+                *(f"Preserved foreign: {path}" for path in result["foreign"]),
+            ]
+        )
     getattr(installer, args.command)(args.name)
     if context.policy.machine:
         return {"tool": args.name, "action": args.command}

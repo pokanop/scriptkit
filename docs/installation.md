@@ -96,12 +96,32 @@ interpreter. Moving/updating the host interpreter is bootstrap's separate concer
 Default uninstall removes owned launchers and deactivates the tool. It deliberately
 retains environments/receipts (including failed stages) so running Windows readers
 remain safe and audit/recovery evidence survives. It never deletes config or user
-data. Destructive generation garbage collection is not exposed by this service;
-operators may clean up private inactive generations after ensuring no readers.
-Foreign files are never recursively removed. This retention trades disk space for
-safety; failed staging consumes space until explicit administrative cleanup.
+data. Reclaim retired generations explicitly after stopping readers of retired
+versions (including processes holding a snapshot across update/uninstall):
 
-### Manual space reclamation
+```sh
+scriptkit prune --dry-run
+scriptkit prune
+scriptkit prune --keep 2 --uninstalled
+```
+
+The default keeps the active generation and its immediate rollback target;
+`--keep N` preserves N previous generations along the receipt lineage (minimum 1).
+`--uninstalled` opts into reclaiming retained generations of uninstalled tools.
+The JSON result lists identical original file paths and logical byte counts for a
+preview and execution against unchanged state; filesystem allocation savings may
+differ. Doctor reports the default reclaimable bytes and suggested command.
+
+Pruning holds the installer lock and only deletes receipt-owned, unmodified files.
+A generation containing foreign/edited files is preserved and reported. Failed
+stages without receipts are reported, not automatically deleted. Pruning never
+changes active pointers, launchers, user config or data. A durable prune journal
+precedes atomic detachment; interruption or a Windows sharing violation leaves
+protected generations intact. Close retired readers, then run `scriptkit recover
+TOOL` to finish cleanup before retrying prune. Recovery removes the prune journal
+and orphaned receipts after cleanup; it does not resurrect deleted versions.
+
+### Manual space reclamation (fallback)
 
 Stop tool processes and prevent new invocations first. Run recovery, then hold the
 root's `scriptkit.manager.storage.locked(root)` lock while inspecting/deleting;
@@ -114,9 +134,9 @@ process remains. Inspect/backup unexpected or user-modified files before manuall
 removing a candidate; do not traverse symlinked roots or delete link targets. Leave
 `installer.lock`, launchers/ownership ledger, pointers, config and user data alone.
 Deletion is optional and irreversible; keeping receipts elsewhere preserves audit
-evidence, not rollback capability. Automated pruning/retention is a proposed later
-manager-maintenance scope, subject to PM confirmation—not part of bootstrap or
-registry cache eviction.
+evidence, not rollback capability. Prefer the command above; use this fallback
+only for unreceipted failed stages or inspected foreign/modified generations.
+Tool pruning is separate from bootstrap and registry cache eviction.
 
 ## Backend decision and system dependencies
 
@@ -142,8 +162,9 @@ read the private tool's `active.json`, validate its target as a generation name,
 and invoke that retained generation directly with an argument list:
 `[str(generation / 'env/Scripts/python.exe'), '-I', '-B', str(generation / 'run.py'), *args]`.
 Use `shell=False`; no command string or `.cmd` intermediary. Retained immutable
-generations keep that snapshot usable across updates/uninstall. Any future pruning
-API must coordinate these readers explicitly.
+generations keep that snapshot usable across updates/uninstall. Before explicitly
+pruning retired versions, stop snapshot readers and prevent new invocations of
+those versions. The installer lock serializes manager mutations, not tool readers.
 
 System package locks produce `doctor:` guidance and stop without staging. This
 service never invokes sudo, apt, brew or winget. Provision prerequisites separately;
