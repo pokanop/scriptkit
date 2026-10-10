@@ -122,7 +122,7 @@ jobs. Release calls the same quality workflow, verifies signed provenance and
 checks a versioned main-ancestor commit; dispatch cannot trigger PyPI publication.
 PyPI additionally requires the enable variable and protected environment.
 
-**Merge enforcement is currently procedure-only.** At the round-1 assessment,
+**Merge enforcement is procedure-only (owner-accepted).** At the assessment,
 `main` has neither branch protection nor a branch ruleset: `required-quality`
 reports a result but does not technically prevent merging or direct pushes.
 The agent push identity is a repository admin and can bypass the `v*` tag
@@ -131,29 +131,37 @@ that check is not evidence of PR review. Controller/human must verify green CI
 and independent exact-head approval before merging, but the token can bypass
 that procedure. Do not equate procedural instructions with enforced controls.
 
-AC 3 remains pending the workspace owner's decision: enforce a main ruleset
-requiring PRs, `required-quality`, an approval, and blocking force-push/deletion
-(without an agent/admin bypass), or explicitly accept procedure-only gating.
-No repository administration settings are changed by this PR.
+**Owner decision — Sahel, 2026-10-10:** option 2, procedure-only gating on
+`main`, is explicitly accepted. AC 3's merge-control position is therefore
+procedure-scoped risk acceptance, not a mechanical guarantee that the token
+cannot bypass controls. No main ruleset is being added. Green CI and independent
+exact-head review remain required by procedure; this acceptance does not waive
+them. No repository administration settings are changed by this PR.
 
-PyPI's environment does enforce a required reviewer with admin bypass disabled
-and self-review blocked. Its only reviewer is the same identity used by agents,
-so a tag pushed by that identity currently has no eligible approver. This fails
-closed but needs the owner's confirmation of the intended publishing identities.
+At the assessment, PyPI's environment enforces a required reviewer with admin
+bypass disabled and self-review blocked. Its only reviewer is the same identity
+used by agents, so a tag pushed by that identity has no eligible approver under
+those settings. **Release/publish approvals are owner-managed (Sahel,
+2026-10-10):** the owner accepts this residual risk and will perform or unblock
+tag/publish approvals himself as needed. This is not evidence that publishing
+is already unblocked. Agents make no environment, ruleset or reviewer changes.
 Independent security approval remains **separate from passing tests**.
 
 No runtime exploit was demonstrated by the added canaries. The stale SECURITY.md
 claim that registry/manager/AI were unimplemented was corrected rather than left
-as misleading guidance. Round-1 mutation checks exposed missing composed
-release/lock and installer hash evidence; the three named tests above cover those
-guards. The merge-control acceptance gap remains explicitly unresolved pending
-the owner's decision, rather than being waived as a later ticket.
+as misleading guidance. Mutation checks exposed missing composed release/lock
+and installer hash evidence; the three named tests above cover those guards.
+The administrative merge/publish risks are explicitly accepted by the owner as
+recorded above, not deferred to a later ticket.
 
 Residual risks, not security guarantees: same-user private-root compromise;
 trusted publisher/package code and inherited environment; undetected secrets in
 user-approved context; provider data retention; dependency vulnerabilities after
 this assessment; local filesystem/power-loss limitations; no signed monotonic
-catalog history; procedure-only main merge/direct-push controls and admin tag
-bypass; the currently unapprovable same-identity PyPI publish flow. Known consumer POK-648 Windows full-uninstall exit-code behavior
-is pre-existing and does not establish a trust-boundary bypass. Voxtract remains
+catalog history. Administrative residual risks **accepted by owner Sahel on
+2026-10-10**: procedure-only main merge/direct-push controls and admin tag bypass;
+the same-identity PyPI approval constraint, with release/publish approvals
+owner-managed. Neither acceptance adds a mechanical control. Known consumer
+POK-648 Windows full-uninstall exit-code behavior is pre-existing and does not
+establish a trust-boundary bypass. Voxtract remains
 POSIX-only; install/help success is not end-to-end Windows media support.

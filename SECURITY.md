@@ -41,8 +41,12 @@ must pass the same quality gates; dispatch alone cannot publish to PyPI.
 Independent review on the exact head remains a procedural delivery requirement,
 separate from test success. Currently `main` has no branch protection/ruleset;
 CI success and PR approval are not technically enforced at merge or direct-push
-time. The admin identity agents use can also bypass the tag ruleset. These are
-unresolved administrative risks requiring the owner's enforcement or explicit
-acceptance, not security guarantees. PyPI's environment blocks admin bypass and
-self-review, but its sole reviewer is that same identity, so agent-pushed tags
-currently have no eligible approver. See the assessment for the owner decision.
+time. The admin identity agents use can also bypass the tag ruleset. **Sahel
+accepted these residual risks on 2026-10-10 (option 2: procedure-only gating)**;
+this is owner risk acceptance, not mechanical enforcement or a security guarantee.
+Release/publish approvals are owner-managed: Sahel will perform or unblock them
+as needed. The assessed PyPI environment blocks admin bypass and self-review,
+with the agent push identity as sole reviewer; its approval constraint remains
+an **accepted-by-owner residual risk (2026-10-10)**, not a claim that publication
+is already unblocked. Agents leave environment, ruleset and reviewer settings
+unchanged. See the assessment for the recorded decision.
