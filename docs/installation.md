@@ -106,11 +106,17 @@ scriptkit prune --keep 2 --uninstalled
 ```
 
 The default keeps the active generation and its immediate rollback target;
-`--keep N` preserves N previous generations along the receipt lineage (minimum 1).
+`--keep N` preserves up to N remaining previous generations along the receipt
+lineage (minimum 1). An ancestor already removed by earlier pruning ends that
+lineage; increasing retention cannot restore it.
 `--uninstalled` opts into reclaiming retained generations of uninstalled tools.
 The JSON result lists identical original file paths and logical byte counts for a
 preview and execution against unchanged state; filesystem allocation savings may
-differ. Doctor reports the default reclaimable bytes and suggested command.
+differ. Doctor reports a best-effort estimate and suggested command without taking
+the installer lock or hashing generation files. Its estimate can change while a
+manager operation runs and does not authorize deletion; `prune --dry-run` performs
+the locked ownership verification. Pending journals or unreadable state make only
+the estimate unavailable, not the rest of the doctor report.
 
 Pruning holds the installer lock and only deletes receipt-owned, unmodified files.
 A generation containing foreign/edited files is preserved and reported. Failed

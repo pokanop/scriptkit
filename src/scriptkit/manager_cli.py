@@ -92,11 +92,17 @@ def dispatch(args: argparse.Namespace, context: OutputContext) -> object:
             "on_path": str(root / "bin") in os.environ.get("PATH", "").split(os.pathsep),
             "guidance": "Install Python 3.11+ with venv/ensurepip. Add the bin directory to PATH explicitly; rerun the pinned bootstrap to repair.",
         }
-        installer = Installer(root / "tools", root / "bin", None)  # type: ignore[arg-type]
-        reclamation = (
-            installer.prune(dry_run=True)
-            if (root / "tools").exists()
-            else {"bytes": 0, "paths": [], "foreign": []}
+        reclamation: dict[str, object] = {"bytes": None, "estimated": True}
+        try:
+            installer = Installer(root / "tools", root / "bin", None)  # type: ignore[arg-type]
+            reclamation["bytes"] = installer.reclamation_estimate()
+        except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
+            # A damaged or concurrently changing tool must not hide manager health.
+            reclamation["error"] = str(exc)
+        reclamation_summary = (
+            f"Estimated reclaimable: {reclamation['bytes']} bytes (run prune --dry-run to verify)"
+            if reclamation["bytes"] is not None
+            else f"Reclaimable estimate unavailable: {reclamation['error']}"
         )
         health["reclamation"] = reclamation
         health["guidance"] = str(health["guidance"]) + (
@@ -113,7 +119,7 @@ def dispatch(args: argparse.Namespace, context: OutputContext) -> object:
                 f"Previous generation: {state.get('previous') or 'none'}",
                 f"Commands: {health['bin']}",
                 f"Commands on PATH: {'yes' if health['on_path'] else 'no'}",
-                f"Reclaimable: {reclamation['bytes']} bytes",
+                reclamation_summary,
                 str(health["guidance"]),
             )
         )
@@ -157,7 +163,7 @@ def dispatch(args: argparse.Namespace, context: OutputContext) -> object:
         root / "tools",
         root / "bin",
         RegistryArtifactSource(resolver, namespace, offline=getattr(args, "offline", False)),
-        checkpoint=lambda phase: context.emit("info", phase),
+        checkpoint=lambda phase: context.emit("info", phase) if phase != "prune-file" else None,
         launcher_interpreter=str(Path(getattr(sys, "_base_executable", sys.executable)).resolve()),
     )
     if args.command in ("install", "update"):

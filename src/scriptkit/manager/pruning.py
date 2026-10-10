@@ -79,7 +79,12 @@ def resume(installer: Any, name: str) -> None:
     journal_path.unlink()
 
 
-def prune(installer: Any, *, keep: int, uninstalled: bool, dry_run: bool) -> dict[str, Any]:
+def prune(
+    installer: Any, *, keep: int, uninstalled: bool, dry_run: bool, estimate: bool = False
+) -> dict[str, Any]:
+    # Doctor uses a lock-free metadata estimate, never a deletion authorization.
+    if estimate and not dry_run:
+        raise ValueError("estimates must be read-only")
     if isinstance(keep, bool) or not isinstance(keep, int) or keep < 1:
         raise ValueError("keep must be at least 1")
     removed: list[str] = []
@@ -112,6 +117,9 @@ def prune(installer: Any, *, keep: int, uninstalled: bool, dry_run: bool) -> dic
                 storage.read(tool / "generations" / previous / "receipt.json") if previous else None
             )
             if previous and receipt is None:
+                ancestor = tool / "generations" / previous
+                if not ancestor.exists():
+                    break  # An earlier prune shortened the reachable lineage.
                 raise StateConflict(f"missing protected receipt: {previous}")
             previous = (
                 receipt["resolved"]["installation"]["previous_generation"] if receipt else None
@@ -124,7 +132,7 @@ def prune(installer: Any, *, keep: int, uninstalled: bool, dry_run: bool) -> dic
         launcher_paths = installer._ownership(name)
         for child in sorted(tool.iterdir()):
             if str(child) in launcher_paths and child.is_file() and not child.is_symlink():
-                if _value(child) == "sha256:" + launcher_paths[str(child)]:
+                if estimate or _value(child) == "sha256:" + launcher_paths[str(child)]:
                     continue
             if child.name not in {"active.json", "launchers.json", "generations"}:
                 foreign.append(str(child))
@@ -135,6 +143,8 @@ def prune(installer: Any, *, keep: int, uninstalled: bool, dry_run: bool) -> dic
         for generation in sorted(generations.iterdir()):
             if generation.is_symlink() or _junction(generation) or not generation.is_dir():
                 foreign.append(str(generation))
+                continue
+            if estimate and (generation.name in protected or (active is None and not uninstalled)):
                 continue
             receipt_path = generation / "receipt.json"
             receipt = storage.read(receipt_path)
@@ -149,7 +159,10 @@ def prune(installer: Any, *, keep: int, uninstalled: bool, dry_run: bool) -> dic
                 if p != receipt_path
                 and (
                     p.relative_to(generation).as_posix() not in inventory
-                    or _value(p) != inventory[p.relative_to(generation).as_posix()]
+                    or (
+                        not estimate
+                        and _value(p) != inventory[p.relative_to(generation).as_posix()]
+                    )
                 )
             ]
             foreign.extend(str(p) for p in unexpected)
@@ -158,10 +171,11 @@ def prune(installer: Any, *, keep: int, uninstalled: bool, dry_run: bool) -> dic
             if re.fullmatch(NAME, generation.name) is None:
                 foreign.append(str(generation))
                 continue
-            owned = {p.relative_to(generation).as_posix(): _value(p) for p in paths}
-            candidates.append((name, generation.name, owned))
-            removed.extend(str(p) for p in paths)
             size += sum(p.lstat().st_size for p in paths)
+            if not estimate:
+                owned = {p.relative_to(generation).as_posix(): _value(p) for p in paths}
+                candidates.append((name, generation.name, owned))
+                removed.extend(str(p) for p in paths)
     if not dry_run:
         for name, generation, owned in candidates:
             storage.publish(

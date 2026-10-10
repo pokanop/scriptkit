@@ -57,7 +57,7 @@ are excluded to avoid self-reference. Line numbers are revision-specific.
 | `docs/generator-upgrades.md` | 12, 13, 16, 20, 32, 34 |
 | `docs/generator.md` | 8, 14, 15, 16, 17, 38, 51, 52, 74, 117 |
 | `docs/getting-started.md` | 3, 5, 17, 26, 41, 44, 45, 46, 51, 52, 53, 62, 63, 64, 65, 67, 68, 69, 87, 88, 90, 91 |
-| `docs/installation.md` | 6, 15, 16, 103, 104, 105, 120, 127 |
+| `docs/installation.md` | 6, 15, 16, 103, 104, 105, 126, 133 |
 | `docs/migration.md` | 21, 49 |
 | `docs/output.md` | 4, 68 |
 | `docs/quality-and-release.md` | 47, 82, 83, 100, 101, 104 |
@@ -142,7 +142,7 @@ are excluded to avoid self-reference. Line numbers are revision-specific.
 | `src/scriptkit/manager/service.py` | 19, 20, 21, 22, 23, 24 |
 | `src/scriptkit/manager/storage.py` | 13 |
 | `src/scriptkit/manager/wheels.py` | 11 |
-| `src/scriptkit/manager_cli.py` | 12, 13, 14, 15, 16, 17, 18, 19, 26, 103, 168, 169 |
+| `src/scriptkit/manager_cli.py` | 12, 13, 14, 15, 16, 17, 18, 19, 26, 109, 174, 175 |
 | `src/scriptkit/output.py` | path only |
 | `src/scriptkit/paths.py` | path only |
 | `src/scriptkit/proc.py` | path only |
@@ -202,7 +202,7 @@ are excluded to avoid self-reference. Line numbers are revision-specific.
 | `tests/test_paths_regions.py` | 3, 4, 5, 86 |
 | `tests/test_proc.py` | 1, 8, 9 |
 | `tests/test_process_cleanup.py` | 7 |
-| `tests/test_pruning.py` | 10, 11, 68, 97, 98 |
+| `tests/test_pruning.py` | 10, 11, 68, 97, 98, 128, 129, 148, 149, 150 |
 | `tests/test_registry.py` | 13, 14, 15, 16, 17, 56 |
 | `tests/test_registry_review.py` | 10, 11, 12, 13, 14 |
 | `tests/test_safe_config.py` | 5, 6 |

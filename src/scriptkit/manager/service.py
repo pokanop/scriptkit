@@ -313,6 +313,18 @@ class Installer:
                 raise ValueError("no previous generation")
             self._activate(name, previous)
 
+    def reclamation_estimate(self) -> int:
+        """Best-effort logical bytes, without locking or hashing generation files.
+
+        May race with manager mutations; callers should report errors as unavailable.
+        Only prune's locked, verified scan can authorize deletion.
+        """
+        from .pruning import prune
+
+        if not self.root.exists():
+            return 0
+        return int(prune(self, keep=1, uninstalled=False, dry_run=True, estimate=True)["bytes"])
+
     def prune(
         self, *, keep: int = 1, uninstalled: bool = False, dry_run: bool = False
     ) -> dict[str, Any]:

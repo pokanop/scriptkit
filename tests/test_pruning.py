@@ -109,6 +109,60 @@ def test_cli(tmp_path, monkeypatch, capsys):
     assert json.loads(capsys.readouterr().out)["data"]["bytes"] == 0
 
 
+def test_keep_after_shortened_lineage(tmp_path):
+    manager = generations(tmp_path)
+    manager.prune()
+    manager.rollback("hello")
+    result = manager.prune(keep=2)
+    assert result["paths"]  # The now-unreferenced third generation is reclaimed.
+    assert manager.current_generation("hello") == "second"
+    assert invoke(manager) == "working"
+    assert manager.prune(keep=2)["paths"] == []
+    manager.uninstall("hello")
+    assert manager.prune(keep=2, uninstalled=True)["paths"]
+
+
+@pytest.mark.parametrize("machine", [False, True])
+@pytest.mark.parametrize("pending", ["journal.json", "prune.json"])
+def test_doctor_pending_operation(tmp_path, monkeypatch, capsys, machine, pending):
+    from scriptkit.entrypoint import main
+    from scriptkit import manager_cli
+
+    manager = generations(tmp_path)
+    monkeypatch.setattr(manager_cli, "Installer", lambda *a, **kw: manager)
+    storage.publish(manager._tool("hello") / pending, {"target": "third"})
+    args = ["--root", str(tmp_path), *(["--json"] if machine else []), "doctor"]
+    assert main(args) == 0
+    output = capsys.readouterr().out
+    if machine:
+        health = json.loads(output)["data"]
+        assert health["python"] and health["root"] == str(tmp_path)
+        assert health["reclamation"]["bytes"] is None
+        assert "recover hello" in health["reclamation"]["error"]
+    else:
+        assert "Python:" in output and "estimate unavailable" in output
+        assert "recover hello" in output
+
+
+def test_doctor_estimate_under_lock_without_hashing(tmp_path, monkeypatch, capsys):
+    from scriptkit.entrypoint import main
+    from scriptkit import manager_cli
+    from scriptkit.manager import pruning
+
+    manager = generations(tmp_path)
+    expected = manager.prune(dry_run=True)["bytes"]
+    monkeypatch.setattr(manager_cli, "Installer", lambda *a, **kw: manager)
+
+    def no_hash(path):
+        pytest.fail(f"doctor must not hash {path}")
+
+    monkeypatch.setattr(pruning, "_value", no_hash)
+    with storage.locked(manager.root):
+        assert main(["--root", str(tmp_path), "--json", "doctor"]) == 0
+    health = json.loads(capsys.readouterr().out)["data"]
+    assert health["reclamation"] == {"bytes": expected, "estimated": True}
+
+
 def test_unknown_state_and_pending(tmp_path):
     manager = generations(tmp_path)
     tool = manager._tool("hello")
