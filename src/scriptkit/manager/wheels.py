@@ -25,6 +25,19 @@ def verify_locks(
                 # Count metadata installed at site-packages root, including
                 # pip's .data/{purelib,platlib} relocation. Nested _vendor
                 # metadata stays nested and does not register a distribution.
+                identities = set()
+                for member in archive.namelist():
+                    match = re.match(
+                        r"(?:[^/]+\.data/(?:purelib|platlib)/)?"
+                        r"([^/]+\.(?:dist-info|egg-info))(?:/|$)",
+                        member,
+                    )
+                    if match:
+                        if match[1].endswith(".egg-info"):
+                            raise ValueError("wheel must not install egg-info metadata")
+                        identities.add(member[: match.end(1)])
+                if len(identities) != 1:
+                    raise ValueError("wheel must contain one distribution metadata directory")
                 entries = [
                     p
                     for p in archive.namelist()

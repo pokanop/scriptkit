@@ -41,6 +41,8 @@ class RegistryStore:
         if consent_origin != registry.origin:
             raise ContractError("explicit consent to exact registry origin required")
         raw, state = self._read()
+        if any(item.namespace == registry.namespace for item in state.registries):
+            raise ContractError(f"registry {registry.namespace!r} is already registered")
         updated = RegistryList(1, (*state.registries, registry))
         self.io.replace(self.path, updated.canonical_json().encode(), expected=raw)
 
