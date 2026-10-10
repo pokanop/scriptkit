@@ -40,11 +40,12 @@ wheel-installable; extension-less launchers are a source-checkout convenience.
 `new-tool` defaults to `--layout standalone` on every invocation; supply
 `--layout repository` when regenerating an existing repository layout.
 
-**Pre-release caveat:** the public runtime-only 1.3.0 wheel does not contain these
-new APIs. The prepared framework version is 1.5.0. Until its verified artifacts
-are published, use the locally built framework wheel alongside generated wheels
-(`pip install --no-index framework.whl tool.whl`). Do not publish generated
-projects pointing to the old public wheel. No existing release is overwritten.
+**Release channel:** the runtime-only 1.3.0 wheel does not contain these APIs.
+Use the verified GitHub framework 1.5.0 wheel alongside generated wheels
+(`pip install --no-index FRAMEWORK_WHEEL TOOL_WHEEL` with actual filenames).
+See [onboarding](getting-started.md) for acquisition and provenance. Do not assume
+PyPI availability or point generated projects at the old runtime-only wheel.
+No existing release is overwritten.
 
 Help, version, doctor and config are read-only. Bare invocation prints help,
 never invokes a handler. `doctor` validates optional `--config file.json` (a JSON

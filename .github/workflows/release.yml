@@ -10,6 +10,9 @@ permissions:
 
 jobs:
   quality:
+    permissions:
+      contents: read
+      attestations: read
     uses: ./.github/workflows/ci.yml
 
   provenance:

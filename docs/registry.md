@@ -1,6 +1,7 @@
 # Trusted registry resolution
 
-`scriptkit.registry` is an opt-in library API (no CLI/UI in this slice). It never
+`scriptkit.registry` is an opt-in library API, composed by the public
+`scriptkit registry` / `catalog` / `install` CLI. It never
 imports the manager, executes tools, resolves public package indexes, or installs
 packages. The registry owns trust records, transport, cache and exact resolution;
 contracts own release/lock validation. The only runtime dependency is the narrow
@@ -36,7 +37,7 @@ Python/platform constraints, selected transitive artifact hashes, and canonical
 SHA-256s of embedded platform locks. Locks are retrieved as part of the pinned
 catalog, not from a mutable secondary endpoint. Every selected artifact is
 retrieved and verified before a plan is returned. Lock publishers must enumerate
-the full transitive closure; a future installer must not infer missing packages
+the full transitive closure; the installer does not infer missing packages
 from an index. Native package artifacts are opaque verified bytes; their backend
 is responsible for safe installation. Pip inputs are wheels only.
 

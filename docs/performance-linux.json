@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "framework": "1.5.0",
+  "python": "3.13.5",
+  "platform": "Linux-6.8.12-13-pve-x86_64-with-glibc2.41",
+  "machine": "x86_64",
+  "method": "fresh process; warm filesystem; no network; median; wall clock",
+  "measurements": {
+    "interpreter": {
+      "samples_seconds": [
+        0.007265657186508179,
+        0.005436464212834835,
+        0.005444259382784367,
+        0.005417428910732269,
+        0.0054404111579060555
+      ],
+      "median_seconds": 0.0054404111579060555
+    },
+    "import": {
+      "samples_seconds": [
+        0.024738100357353687,
+        0.02514719031751156,
+        0.02345861028879881,
+        0.023467637598514557,
+        0.02502628229558468
+      ],
+      "median_seconds": 0.024738100357353687
+    },
+    "help": {
+      "samples_seconds": [
+        0.059281907975673676,
+        0.061723084188997746,
+        0.05894167721271515,
+        0.061470989137887955,
+        0.06164844240993261
+      ],
+      "median_seconds": 0.061470989137887955
+    },
+    "generation": {
+      "samples_seconds": [
+        0.006951475515961647,
+        0.004749680869281292,
+        0.004642409272491932,
+        0.004598096013069153,
+        0.004703763872385025
+      ],
+      "median_seconds": 0.004703763872385025
+    },
+    "installer": {
+      "samples_seconds": [
+        1.3936854684725404,
+        1.391396189108491,
+        1.3975653443485498
+      ],
+      "median_seconds": 1.3936854684725404
+    }
+  },
+  "budgets_seconds": {
+    "interpreter": 1,
+    "import": 1,
+    "help": 2,
+    "generation": 2,
+    "installer": 60
+  },
+  "installer_includes": "venv + ensurepip + verified tiny wheel + smoke + receipt"
+}
