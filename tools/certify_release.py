@@ -127,16 +127,12 @@ def main():
                 sys.executable,
                 ROOT / "tools/check_artifact.py",
                 wheel,
-                "--benchmark",
-                output / "benchmark.json",
                 "--results",
                 output / "framework.xml",
                 cwd=ROOT,
                 env=env,
             )
-            report["steps"].append(
-                "installed release wheel: full suite and benchmarks outside checkout"
-            )
+            report["steps"].append("installed release wheel: full suite outside checkout")
             candidate = work / "candidate-dist"
             run(
                 sys.executable,
@@ -164,15 +160,21 @@ def main():
                 cwd=work,
                 env=env,
             )
+            baseline_env = work / "baseline-env"
+            venv.EnvBuilder(with_pip=True).create(baseline_env)
+            baseline_python = baseline_env / (
+                "Scripts/python.exe" if os.name == "nt" else "bin/python"
+            )
+            run(baseline_python, "-m", "pip", "install", wheel, "pytest==9.1.1", cwd=work, env=env)
             shutil.copytree(ROOT / "tests", work / "tests")
             shutil.copy(ROOT / "tools/benchmark.py", work / "benchmark.py")
             run(
-                candidate_python,
+                baseline_python,
                 "-I",
                 work / "benchmark.py",
                 output / "candidate-benchmark.json",
-                "--baseline",
-                output / "benchmark.json",
+                "--peer-python",
+                candidate_python,
                 cwd=work,
                 env=env,
             )

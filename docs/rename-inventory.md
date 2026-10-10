@@ -34,7 +34,7 @@ are excluded to avoid self-reference. Line numbers are revision-specific.
 | Framework file | Matching lines |
 | --- | --- |
 | `.gitattributes` | 2 |
-| `.github/workflows/ci.yml` | 35, 36, 39, 77, 106, 107 |
+| `.github/workflows/ci.yml` | 37, 38, 41, 79, 108, 109 |
 | `.github/workflows/release.yml` | 52 |
 | `CONTRIBUTING.md` | 10, 11 |
 | `NOTICE.md` | 3, 8 |
@@ -206,11 +206,11 @@ are excluded to avoid self-reference. Line numbers are revision-specific.
 | `tests/test_style.py` | 1, 3 |
 | `tests/test_text.py` | 1, 3 |
 | `tests/test_windows_job.py` | 8 |
-| `tools/benchmark.py` | 26, 27, 28, 29, 30, 59, 60 |
-| `tools/certify_release.py` | 46, 61, 119, 201, 206, 207, 208, 209 |
+| `tools/benchmark.py` | 37, 38, 39, 40, 41, 72, 73 |
+| `tools/certify_release.py` | 46, 61, 119, 203, 208, 209, 210, 211 |
 | `tools/check_artifact.py` | 25, 28, 33, 54, 60, 63, 74, 90 |
 | `tools/check_failure_gates.py` | 17 |
 | `tools/export_contracts.py` | 6, 60 |
 | `tools/rehearse_release.py` | 50, 64, 105 |
-| `tools/tests/test_certification.py` | 76, 77, 78 |
+| `tools/tests/test_certification.py` | 134, 135, 136 |
 | `tools/tests/test_quality_tools.py` | 76, 85 |

@@ -14,7 +14,9 @@ jobs:
   runtime:
     name: runtime (${{ matrix.os }}, Python ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    # Three complete suites plus real generated-tool lifecycle; Windows 3.11/12
+    # exceeded the former 20m total while still passing tests. No suite is skipped.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

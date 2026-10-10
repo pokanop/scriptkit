@@ -62,8 +62,13 @@ claim. All provider behavior is synthetic; real secrets/data never enter CI.
 
 `tools/benchmark.py` records OS/architecture/Python, all wall-clock samples and
 medians: five fresh-process interpreter/import/help samples, five fresh-project
-render+preview+transaction generations, and three real pip installations of the
-same tiny verified wheel. Installer time includes venv, ensurepip, hash/archive
+render+preview+transaction generations, and five real pip installations of the
+same tiny verified wheel. Baseline and candidate run in five interleaved pairs,
+alternating which goes first; both environments are provisioned before measurement.
+This avoids comparing a warmed-up release against a candidate immediately after
+build/pip activity while Windows antivirus is still scanning. There is no automatic
+retry-until-pass. Standalone `--benchmark` runs retain the original three-install
+sampling method used by the checked-in Linux baseline. Installer time includes venv, ensurepip, hash/archive
 validation, offline pip, smoke, receipt and activation; it excludes network and
 large dependency downloads. Filesystem caches are warm. This is not a cold-boot,
 GUI responsiveness, AI inference or large-model benchmark.

@@ -67,6 +67,64 @@ def test_rejects_inconsistent_release(tmp_path, mutation):
         module.verify_assets(tmp_path, pins)
 
 
+def test_interleaved_benchmark_order_and_regression_gate(tmp_path, monkeypatch):
+    benchmark_spec = importlib.util.spec_from_file_location(
+        "benchmark", ROOT / "tools/benchmark.py"
+    )
+    benchmark = importlib.util.module_from_spec(benchmark_spec)
+    benchmark_spec.loader.exec_module(benchmark)
+    calls = []
+
+    def sample(argv, **kwargs):
+        calls.append(argv[0])
+        value = {
+            "python": "3.13",
+            "platform": "fixture",
+            "method": "fixture",
+            "measurements": {
+                name: {"samples_seconds": [0.1], "median_seconds": 0.1}
+                for name in benchmark.BUDGETS
+            },
+        }
+        Path(argv[3]).write_text(json.dumps(value))
+
+    monkeypatch.setattr(benchmark.subprocess, "run", sample)
+    output = tmp_path / "candidate.json"
+    benchmark.compare(Path("candidate-python"), output)
+    assert calls == [
+        benchmark.sys.executable,
+        "candidate-python",
+        "candidate-python",
+        benchmark.sys.executable,
+    ] * 2 + [benchmark.sys.executable, "candidate-python"]
+    result = json.loads(output.read_text())
+    assert len(result["measurements"]["generation"]["samples_seconds"]) == 5
+    result["measurements"]["generation"]["median_seconds"] = 1.0
+    with pytest.raises(AssertionError):
+        benchmark.enforce(result)
+
+
+def test_benchmark_canonicalizes_os_temp_alias(tmp_path, monkeypatch):
+    benchmark_spec = importlib.util.spec_from_file_location(
+        "benchmark", ROOT / "tools/benchmark.py"
+    )
+    benchmark = importlib.util.module_from_spec(benchmark_spec)
+    benchmark_spec.loader.exec_module(benchmark)
+    actual = tmp_path / "actual"
+    actual.mkdir()
+    alias = tmp_path / "alias"
+    try:
+        alias.symlink_to(actual, target_is_directory=True)
+    except OSError:
+        pytest.skip("host does not permit directory symlinks")
+    monkeypatch.setattr(benchmark.tempfile, "tempdir", str(alias))
+    with benchmark.temporary_root() as root:
+        assert root.parent == actual.resolve()
+        assert root == root.resolve()
+        assert root.is_dir()
+    assert not root.exists()
+
+
 def test_renaming_inventory_finds_paths_and_variants(tmp_path, monkeypatch):
     inventory_spec = importlib.util.spec_from_file_location(
         "inventory", ROOT / "tools/rename_inventory.py"
