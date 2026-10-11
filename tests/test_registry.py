@@ -110,7 +110,7 @@ def test_consent_and_shadowing(fixture):
     store, cache, resolver, registration, transport = fixture
     with pytest.raises(ContractError, match="consent"):
         store.add(registration, consent_origin="")
-    with pytest.raises(ContractError, match="duplicate"):
+    with pytest.raises(ContractError, match="registry 'local-catalog' is already registered"):
         store.add(
             replace(registration, origin="https://evil.example/"),
             consent_origin="https://evil.example/",

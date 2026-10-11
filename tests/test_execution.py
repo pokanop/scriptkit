@@ -84,8 +84,10 @@ def test_os_error_sanitized(monkeypatch):
 def test_owned_child_cleanup_and_unrelated_survives(tmp_path, reason):
     ready = tmp_path / "ready"
     child = (
-        "import socket,time,pathlib; s=socket.socket(); s.bind(('127.0.0.1',0)); "
-        f"pathlib.Path({str(ready)!r}).write_text(str(s.getsockname()[1])); time.sleep(60)"
+        "import os,socket,time,pathlib; s=socket.socket(); s.bind(('127.0.0.1',0)); "
+        f"p=pathlib.Path({str(ready)!r}); "
+        "p.with_suffix('.tmp').write_text(str(s.getsockname()[1])); "
+        "os.replace(p.with_suffix('.tmp'),p); time.sleep(60)"
     )
     parent = (
         f"import subprocess,sys,time,pathlib; subprocess.Popen([sys.executable,'-c',{child!r}]); "

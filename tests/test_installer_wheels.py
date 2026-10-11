@@ -38,14 +38,25 @@ def test_dependency_wheel_identity(tmp_path, metadata, vendored):
             verify_locks(plan, {item: raw})
 
 
-@pytest.mark.parametrize("scheme", ["purelib", "platlib"])
+@pytest.mark.parametrize(
+    "prefix", ["", "dependency-1.0.0.data/purelib/", "dependency-1.0.0.data/platlib/"]
+)
+@pytest.mark.parametrize(
+    "extra",
+    [
+        "numpy-9.9.dist-info/METADATA",
+        "numpy-9.9.dist-info/WHEEL",
+        "numpy-9.9.egg-info/PKG-INFO",
+        "numpy.egg-info",
+    ],
+)
 @pytest.mark.parametrize("on_disk", [False, True])
-def test_rejects_relocated_distribution_metadata(tmp_path, scheme, on_disk):
+def test_rejects_relocated_distribution_metadata(tmp_path, prefix, extra, on_disk):
     _, resolved = fixture(tmp_path)
     raw = archive(
         {
             "dependency-1.0.0.dist-info/METADATA": "Name: dependency\nVersion: 1.0.0\n",
-            f"dependency-1.0.0.data/{scheme}/numpy-9.9.dist-info/METADATA": "Name: numpy\nVersion: 9.9\n",
+            prefix + extra: "Name: numpy\nVersion: 9.9\n",
         }
     )
     item = artifact("dependency-1.0.0-py3-none-any.whl", raw)
@@ -58,7 +69,7 @@ def test_rejects_relocated_distribution_metadata(tmp_path, scheme, on_disk):
     )
     path = tmp_path / item.path
     path.write_bytes(raw)
-    with pytest.raises(ValueError, match="one distribution metadata"):
+    with pytest.raises(ValueError, match="metadata"):
         verify_locks(plan, {item: path if on_disk else raw})
 
 

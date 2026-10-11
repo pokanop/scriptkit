@@ -36,7 +36,9 @@ def configure(commands: Any) -> None:
         if verb == "new-tool":
             parser.add_argument("--spec", type=Path, required=True)
             parser.add_argument(
-                "--layout", choices=("standalone", "repository"), default="standalone"
+                "--layout",
+                choices=("standalone", "repository"),
+                help="default: existing project layout, or standalone for a new project",
             )
         if verb == "add-command":
             parser.add_argument("--spec", type=Path, required=True, help="CommandSpec JSON")
@@ -91,7 +93,8 @@ def dispatch(args: argparse.Namespace) -> AuthoringResult:
         ):
             raise ValueError("cannot change project kind; use a separate directory")
     if args.command == "new-tool":
-        rendered = tool(ToolSpec.from_json(args.spec.read_text(encoding="utf-8")), args.layout)
+        layout = args.layout or (existing(root)[1] if previous else "standalone")
+        rendered = tool(ToolSpec.from_json(args.spec.read_text(encoding="utf-8")), layout)
     elif args.command in {"add-command", "template-upgrade"}:
         spec, layout = existing(root)
         if args.command == "add-command":

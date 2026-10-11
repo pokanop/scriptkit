@@ -128,7 +128,7 @@ are excluded to avoid self-reference. Line numbers are revision-specific.
 | `src/scriptkit/execution.py` | path only |
 | `src/scriptkit/generator/__init__.py` | path only |
 | `src/scriptkit/generator/__main__.py` | 1, 9 |
-| `src/scriptkit/generator/cli.py` | 11, 12, 120 |
+| `src/scriptkit/generator/cli.py` | 11, 12, 123 |
 | `src/scriptkit/generator/plan.py` | 10, 11, 23, 30, 155 |
 | `src/scriptkit/generator/render.py` | 12, 59, 67 |
 | `src/scriptkit/generator/resources/__init__.py` | path only |
@@ -201,10 +201,11 @@ are excluded to avoid self-reference. Line numbers are revision-specific.
 | `tests/test_output_terminal.py` | 10, 41 |
 | `tests/test_paths_regions.py` | 3, 4, 5, 86 |
 | `tests/test_proc.py` | 1, 8, 9 |
-| `tests/test_process_cleanup.py` | 7 |
+| `tests/test_process_cleanup.py` | 8 |
 | `tests/test_pruning.py` | 10, 11, 68, 97, 98, 128, 129, 148, 149, 150 |
 | `tests/test_registry.py` | 13, 14, 15, 16, 17, 56 |
 | `tests/test_registry_review.py` | 10, 11, 12, 13, 14 |
+| `tests/test_runtime_sweep.py` | 8, 9, 10, 11 |
 | `tests/test_safe_config.py` | 5, 6 |
 | `tests/test_scaffold_review.py` | 12, 13, 14, 15, 16, 17 |
 | `tests/test_scaffolds.py` | 17, 18, 19, 20, 21, 22, 23, 108, 240, 261, 262, 263, 265, 301 |

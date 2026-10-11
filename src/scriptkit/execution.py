@@ -22,10 +22,12 @@ def _kill_group(process: subprocess.Popen[bytes]) -> None:
     except ProcessLookupError:
         pass
     except PermissionError:
-        # Darwin reports EPERM for a group containing only an unreaped zombie.
-        # Reap the leader, then retry; never suppress a live-group denial.
-        if process.poll() is None:
-            raise
+        # Darwin can report EPERM while the leader is still exiting. Allow a
+        # bounded reap before retrying; never suppress a persistent denial.
+        try:
+            process.wait(timeout=0.1)
+        except subprocess.TimeoutExpired:
+            pass
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:

@@ -37,8 +37,8 @@ requirements, configuration example, smoke tests, CI workflow, README and
 `python bin/<name>`; explicitly `chmod +x` to execute them directly on Unix.
 New files retain the transaction engine's private 0600 policy. Both layouts are
 wheel-installable; extension-less launchers are a source-checkout convenience.
-`new-tool` defaults to `--layout standalone` on every invocation; supply
-`--layout repository` when regenerating an existing repository layout.
+`new-tool` preserves an existing project's layout when `--layout` is omitted,
+and defaults to standalone for a new project. Supply `--layout` to switch deliberately.
 
 **Release channel:** the runtime-only 1.3.0 wheel does not contain these APIs.
 Use the verified GitHub framework 1.5.0 wheel alongside generated wheels

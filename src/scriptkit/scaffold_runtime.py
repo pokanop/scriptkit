@@ -59,9 +59,14 @@ def tool_main(
 
     def execute() -> object:
         args = parser.parse_args(arguments)
-        config = {} if args.config is None else json.loads(args.config.read_text(encoding="utf-8"))
-        if not isinstance(config, dict):
-            raise ValueError("configuration must be a JSON object")
+        config = {}
+        if args.config is not None:
+            try:
+                config = json.loads(args.config.read_text(encoding="utf-8"))
+                if not isinstance(config, dict):
+                    raise ValueError("configuration must be a JSON object")
+            except (ValueError, OSError) as exc:
+                raise ValueError(f"invalid config {args.config}: {exc}") from exc
         if args.command is None:
             parser.print_help()
             return None
@@ -86,6 +91,8 @@ def tool_main(
                 return CommandResult(
                     exit_code=result, error=f"exited with status {result}" if result else None
                 )
+            if isinstance(result, Mapping) and not context.policy.machine:
+                return json.dumps(dict(result), indent=2, sort_keys=True)
             return result
         except NotImplementedError as exc:
             raise ValueError(
