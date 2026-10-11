@@ -14,6 +14,7 @@ import time
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from scriptkit.contracts.artifacts import ArtifactPolicy, DEFAULT_ARTIFACT_POLICY
 from scriptkit.contracts.models import NAME
@@ -259,6 +260,9 @@ class Installer:
 
     def _recover(self, name: str) -> None:
         tool = self._tool(name)
+        from .pruning import resume
+
+        resume(self, name)
         journal = storage.read(tool / "journal.json")
         if journal is None:
             return
@@ -308,6 +312,27 @@ class Installer:
             if previous is None:
                 raise ValueError("no previous generation")
             self._activate(name, previous)
+
+    def reclamation_estimate(self) -> int:
+        """Best-effort logical bytes, without locking or hashing generation files.
+
+        May race with manager mutations; callers should report errors as unavailable.
+        Only prune's locked, verified scan can authorize deletion.
+        """
+        from .pruning import prune
+
+        if not self.root.exists():
+            return 0
+        return int(prune(self, keep=1, uninstalled=False, dry_run=True, estimate=True)["bytes"])
+
+    def prune(
+        self, *, keep: int = 1, uninstalled: bool = False, dry_run: bool = False
+    ) -> dict[str, Any]:
+        """Reclaim retired receipt-owned generations, preserving rollback lineage."""
+        from .pruning import prune
+
+        with storage.locked(self.root):
+            return prune(self, keep=keep, uninstalled=uninstalled, dry_run=dry_run)
 
     def uninstall(self, name: str) -> None:
         """Deactivate and remove only owned launchers; retain generations/data/config.
